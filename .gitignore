@@ -1,0 +1,43 @@
+# Build outputs
+build/
+*.elf
+*.bin
+*.o
+*.d
+*.img
+*.iso
+*.map
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+serial_output.txt
+serial_pipe
+
+# VM files
+*.utm
+*.qcow2
+*.vmdk
+
+# Debug files
+core
+*.core
+gdb_history
+
+# Logs
+*.log
+
+# Backup files
+*.bak
+*.backup
