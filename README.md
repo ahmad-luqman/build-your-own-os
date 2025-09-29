@@ -53,10 +53,27 @@ build-your-own-os/
 
 ## Getting Started
 
-1. **Prerequisites**: See [PREREQUISITES.md](docs/PREREQUISITES.md)
-2. **Build Instructions**: See [BUILD.md](docs/BUILD.md)
-3. **Development Plan**: See [DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md)
-4. **VM Setup**: See [VM_SETUP.md](docs/VM_SETUP.md)
+### Quick Start (Phase 1)
+```bash
+# Check Phase 1 status
+make info
+./tools/test-phase1.sh
+
+# Install prerequisites
+./tools/check-prerequisites.sh
+
+# Build and test
+make ARCH=arm64
+make test
+```
+
+### Complete Documentation
+1. **Phase 1 Usage**: See [PHASE1_USAGE.md](docs/PHASE1_USAGE.md) - How to run current implementation
+2. **Prerequisites**: See [PREREQUISITES.md](docs/PREREQUISITES.md) - Environment setup
+3. **Build Instructions**: See [BUILD.md](docs/BUILD.md) - Detailed build system
+4. **Development Plan**: See [DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) - Complete roadmap
+5. **VM Setup**: See [VM_SETUP.md](docs/VM_SETUP.md) - Virtual machine configuration
+6. **Testing Guide**: See [PHASE1_TESTING.md](docs/PHASE1_TESTING.md) - Validation procedures
 
 ## Documentation
 
