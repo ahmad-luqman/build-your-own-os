@@ -141,8 +141,13 @@ void kernel_main(struct boot_info *boot_info)
     early_print(freq_str);
     early_print(" Hz\n");
     
-    // TODO: Initialize UART drivers (Phase 4 continued)
-    early_print("TODO: UART driver initialization\n");
+    // Initialize UART services
+    if (uart_init() < 0) {
+        kernel_panic("UART subsystem initialization failed");
+    }
+    
+    // Test UART functionality
+    uart_test_output();
     
     // TODO: Initialize interrupt management (Phase 4 continued)
     early_print("TODO: Interrupt management initialization\n");

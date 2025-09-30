@@ -75,8 +75,9 @@ print_header
 echo "Phase 4 Test Categories:"
 echo "1. Device Driver Framework"
 echo "2. Timer Services"
-echo "3. Build System Integration"
-echo "4. Cross-platform Compatibility"
+echo "3. UART Communication Drivers"
+echo "4. Build System Integration"
+echo "5. Cross-platform Compatibility"
 echo ""
 
 # Test 1: Device Driver Framework
@@ -117,8 +118,27 @@ run_test "ARM64 timer driver compiles" "aarch64-elf-gcc -ffreestanding -nostdlib
 
 run_test "x86-64 timer driver compiles" "x86_64-elf-gcc -ffreestanding -nostdlib -nostartfiles -nodefaultlibs -Wall -Wextra -Werror -std=c11 -Isrc/include -Isrc/arch/x86_64/include -O2 -c src/drivers/timer/x86_64_timer.c -o /tmp/x86_64_timer.o"
 
+# Test 3: UART Communication Drivers  
+print_test_category "Test 3: UART Communication Drivers"
+
+run_test "UART header compilation (ARM64)" "aarch64-elf-gcc -ffreestanding -nostdlib -nostartfiles -nodefaultlibs -Wall -Wextra -Werror -std=c11 -Isrc/include -Isrc/arch/arm64/include -c -x c -o /dev/null - <<< '#include \"uart.h\"'"
+
+run_test "UART header compilation (x86-64)" "x86_64-elf-gcc -ffreestanding -nostdlib -nostartfiles -nodefaultlibs -Wall -Wextra -Werror -std=c11 -Isrc/include -Isrc/arch/x86_64/include -c -x c -o /dev/null - <<< '#include \"uart.h\"'"
+
+run_test "UART subsystem implementation exists" "[ -f src/kernel/uart.c ]"
+
+run_test "ARM64 PL011 UART driver exists" "[ -f src/drivers/uart/pl011.c ]"
+
+run_test "x86-64 16550 UART driver exists" "[ -f src/drivers/uart/16550.c ]"
+
+run_test "UART subsystem compiles (ARM64)" "aarch64-elf-gcc -ffreestanding -nostdlib -nostartfiles -nodefaultlibs -Wall -Wextra -Werror -std=c11 -Isrc/include -Isrc/arch/arm64/include -O2 -c src/kernel/uart.c -o /tmp/uart_arm64.o"
+
+run_test "ARM64 PL011 UART driver compiles" "aarch64-elf-gcc -ffreestanding -nostdlib -nostartfiles -nodefaultlibs -Wall -Wextra -Werror -std=c11 -Isrc/include -Isrc/arch/arm64/include -O2 -c src/drivers/uart/pl011.c -o /tmp/pl011_uart.o"
+
+run_test "x86-64 16550 UART driver compiles" "x86_64-elf-gcc -ffreestanding -nostdlib -nostartfiles -nodefaultlibs -Wall -Wextra -Werror -std=c11 -Isrc/include -Isrc/arch/x86_64/include -O2 -c src/drivers/uart/16550.c -o /tmp/16550_uart.o"
+
 # Test 3: Build System Integration
-print_test_category "Test 3: Build System Integration"
+print_test_category "Test 4: Build System Integration"
 
 run_test "ARM64 kernel builds with Phase 4" "make ARCH=arm64 clean >/dev/null 2>&1 && make ARCH=arm64 kernel >/dev/null 2>&1"
 
@@ -137,7 +157,7 @@ run_test "x86-64 full system builds" "make ARCH=x86_64 clean >/dev/null 2>&1 && 
 run_test "x86-64 bootable ISO created" "[ -f build/x86_64/minios.iso ]"
 
 # Test 4: Cross-platform Compatibility
-print_test_category "Test 4: Cross-platform Compatibility"
+print_test_category "Test 5: Cross-platform Compatibility"
 
 run_test "Device discovery implementation (ARM64)" "[ -f src/arch/arm64/device_discovery.c ]"
 
@@ -153,11 +173,11 @@ run_test "Phase 4 includes in kernel header" "grep -q 'device.h' src/include/ker
 
 run_test "Device initialization in kernel main" "grep -q 'device_init' src/kernel/main.c"
 
-run_test "Timer initialization in kernel main" "grep -q 'timer_init' src/kernel/main.c"
+run_test "UART initialization in kernel main" "grep -q 'uart_init' src/kernel/main.c"
 
 # Clean up temporary files
 rm -f /tmp/device_arm64.o /tmp/driver_x86_64.o /tmp/timer_arm64.o /tmp/arm64_timer.o /tmp/x86_64_timer.o
-rm -f /tmp/device_discovery_arm64.o /tmp/device_discovery_x86_64.o
+rm -f /tmp/device_discovery_arm64.o /tmp/device_discovery_x86_64.o /tmp/uart_arm64.o /tmp/pl011_uart.o /tmp/16550_uart.o
 
 print_summary
 
