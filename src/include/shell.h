@@ -17,6 +17,10 @@ extern "C" {
 #define SHELL_PROMPT                "MiniOS> "
 #define SHELL_HISTORY_SIZE          16
 
+// Forward declarations for Phase 7 advanced features
+struct history_context;
+struct completion_context;
+
 // Shell context structure
 struct shell_context {
     char current_directory[SHELL_MAX_PATH_LENGTH];
@@ -26,7 +30,17 @@ struct shell_context {
     int exit_requested;
     struct fd_table *fd_table;
     
-    // Command history
+    // Phase 7: Enhanced input handling
+    char *input_buffer;             // Dynamic input buffer
+    int buffer_size;                // Buffer size
+    int cursor_pos;                 // Current cursor position
+    int buffer_length;              // Current content length
+    
+    // Phase 7: Advanced features
+    struct history_context *history;     // Command history
+    struct completion_context *completion; // Tab completion
+    
+    // Command history (legacy - kept for compatibility)
     char command_history[SHELL_HISTORY_SIZE][SHELL_MAX_COMMAND_LENGTH];
     int history_count;
     int history_index;
@@ -35,6 +49,10 @@ struct shell_context {
     int stdin_fd;
     int stdout_fd;
     int stderr_fd;
+    
+    // Phase 7: Environment variables
+    char **environment;             // Environment variables
+    int env_count;                  // Number of environment variables
 };
 
 // Shell command structure
@@ -114,6 +132,25 @@ void register_shell_syscalls(void);
 #define SHELL_ENOENT           -3
 #define SHELL_EPERM            -4
 #define SHELL_ENOMEM           -5
+
+// Phase 7: Advanced shell functions
+int shell_init_advanced_features(struct shell_context *ctx);
+void shell_cleanup_advanced_features(struct shell_context *ctx);
+int shell_handle_special_keys(struct shell_context *ctx, char ch);
+void shell_clear_input_line(struct shell_context *ctx);
+
+// Phase 7: Environment variable functions
+int shell_set_env(struct shell_context *ctx, const char *name, const char *value);
+const char *shell_get_env(struct shell_context *ctx, const char *name);
+int shell_unset_env(struct shell_context *ctx, const char *name);
+void shell_display_env(struct shell_context *ctx);
+
+// Phase 7: User program execution
+int shell_exec_user_program(struct shell_context *ctx, const char *path, int argc, char *argv[]);
+int shell_run_command(struct shell_context *ctx, const char *command);
+
+// Phase 7: I/O redirection support
+int shell_parse_with_redirection(struct shell_context *ctx, const char *command_line);
 
 #ifdef __cplusplus
 }
