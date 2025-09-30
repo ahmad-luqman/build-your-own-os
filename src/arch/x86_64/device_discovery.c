@@ -43,16 +43,18 @@ int arch_device_scan(void)
         }
     }
     
-    // TODO: Add UART device discovery (would scan for 16550 compatible)
-    // struct device *uart_dev = device_create("uart0", DEVICE_TYPE_UART);
-    // if (uart_dev) {
-    //     uart_dev->base_addr = 0x3F8; // COM1 port
-    //     uart_dev->irq_num = 4;       // COM1 IRQ
-    //     if (device_register(uart_dev) == 0) {
-    //         device_count++;
-    //         early_print("x86-64: Found 16550 UART\n");
-    //     }
-    // }
+    // Create UART device (16550 compatible)
+    struct device *uart_dev = device_create("com1", DEVICE_TYPE_UART);
+    if (uart_dev) {
+        // Set x86-64-specific properties for 16550 UART
+        uart_dev->base_addr = 0x3F8; // COM1 port
+        uart_dev->irq_num = 4;       // COM1 IRQ
+        
+        if (device_register(uart_dev) == 0) {
+            device_count++;
+            early_print("x86-64: Found 16550 UART\n");
+        }
+    }
     
     // TODO: Add interrupt controller discovery
     // struct device *pic_dev = device_create("pic", DEVICE_TYPE_INTERRUPT);
