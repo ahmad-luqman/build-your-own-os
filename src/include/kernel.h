@@ -28,8 +28,11 @@
 #error "Unsupported architecture"
 #endif
 
+// Include boot protocol
+#include "boot_protocol.h"
+
 // Function declarations
-void kernel_main(void);
+void kernel_main(struct boot_info *boot_info);
 void kernel_panic(const char *message);
 void early_print(const char *str);
 
