@@ -4,8 +4,27 @@
 #include <stdint.h>
 #include <stddef.h>
 
+// Additional types needed by file system
+typedef long ssize_t;
+typedef long off_t;
+
+// Memory allocation aliases for filesystem (compatibility)
+#define kmalloc(size) memory_alloc(size, 0)
+#define kfree(ptr) memory_free(ptr)
+int strlen(const char *str);
+int strcmp(const char *s1, const char *s2);
+int strncmp(const char *s1, const char *s2, size_t n);
+char *strcpy(char *dest, const char *src);
+char *strncpy(char *dest, const char *src, size_t n);
+char *strcat(char *dest, const char *src);
+char *strchr(const char *str, int c);
+char *strrchr(const char *str, int c);
+void *memset(void *s, int c, size_t n);
+void *memcpy(void *dest, const void *src, size_t n);
+int memcmp(const void *s1, const void *s2, size_t n);
+
 // Kernel configuration
-#define KERNEL_VERSION "0.4.0-dev"
+#define KERNEL_VERSION "0.5.0-dev"
 #define KERNEL_NAME "MiniOS"
 
 // Log levels

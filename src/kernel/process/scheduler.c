@@ -8,13 +8,6 @@
 #include "timer.h"
 #include "kernel.h"
 
-// Simple string functions (replacing string.h)
-static void *memset(void *s, int c, size_t n) {
-    unsigned char *p = s;
-    while (n--) *p++ = (unsigned char)c;
-    return s;
-}
-
 // External scheduler reference (defined in process.c)
 struct scheduler g_scheduler;
 
