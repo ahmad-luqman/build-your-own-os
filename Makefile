@@ -33,13 +33,14 @@ endif
 # Linker flags
 LDFLAGS = -nostdlib -static
 
-# Source files
+# Source files for kernel (exclude bootloader files)
 KERNEL_C_SOURCES = $(wildcard $(SRC_DIR)/kernel/*.c)
-KERNEL_C_SOURCES += $(wildcard $(SRC_DIR)/arch/$(ARCH)/*.c)
+KERNEL_C_SOURCES += $(filter-out %boot_main.c %uefi_boot.c, $(wildcard $(SRC_DIR)/arch/$(ARCH)/*.c))
 KERNEL_C_SOURCES += $(wildcard $(SRC_DIR)/drivers/*.c)
 
-KERNEL_ASM_SOURCES = $(wildcard $(SRC_DIR)/arch/$(ARCH)/*.S)
-KERNEL_ASM_SOURCES += $(wildcard $(SRC_DIR)/arch/$(ARCH)/*.asm)
+# Assembly sources for kernel (exclude bootloader entry points)
+KERNEL_ASM_SOURCES = $(filter-out %boot.S %boot.asm, $(wildcard $(SRC_DIR)/arch/$(ARCH)/*.S))
+KERNEL_ASM_SOURCES += $(filter-out %boot.S %boot.asm, $(wildcard $(SRC_DIR)/arch/$(ARCH)/*.asm))
 
 # Object files
 KERNEL_C_OBJECTS = $(KERNEL_C_SOURCES:$(SRC_DIR)/%.c=$(BUILD_DIR)/$(ARCH)/%.o)

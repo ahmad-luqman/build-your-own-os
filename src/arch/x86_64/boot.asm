@@ -140,17 +140,21 @@ long_mode_start:
     mov ss, ax
     
     ; Clear BSS
+    extern __bss_start
+    extern __bss_end
     mov rdi, __bss_start
     mov rcx, __bss_end
     sub rcx, rdi
     mov rax, 0
     rep stosb
     
-    ; Call kernel main
-    extern kernel_main
-    call kernel_main
+    ; Call bootloader main with multiboot info
+    mov edi, [multiboot_magic]  ; First argument: multiboot magic
+    mov esi, [multiboot_info]   ; Second argument: multiboot info
+    extern boot_main
+    call boot_main
     
-    ; Halt if kernel returns
+    ; Halt if bootloader returns
 .halt:
     hlt
     jmp .halt

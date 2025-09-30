@@ -1,36 +1,38 @@
 /*
  * MiniOS ARM64 Bootloader
- * Initial boot code for AArch64 architecture
+ * UEFI entry point for AArch64 architecture
  */
 
 .section ".text.start"
 .global _start
 
 _start:
-    // We assume we're loaded by UEFI or similar at EL1
-    // For now, just set up a minimal stack and jump to kernel
+    // UEFI entry point
+    // x0 = EFI_HANDLE image_handle
+    // x1 = EFI_SYSTEM_TABLE *system_table
     
     // Disable interrupts
     msr daifset, #0xf
     
     // Set up initial stack (use end of first 64KB as stack)
-    ldr x0, =stack_top
-    mov sp, x0
+    ldr x2, =stack_top
+    mov sp, x2
     
     // Clear BSS section
-    ldr x0, =__bss_start
-    ldr x1, =__bss_end
-    sub x1, x1, x0        // Calculate size
-    mov x2, #0
+    ldr x2, =__bss_start
+    ldr x3, =__bss_end
+    sub x3, x3, x2        // Calculate size
+    mov x4, #0
 clear_bss:
-    cbz x1, bss_cleared
-    str x2, [x0], #8
-    sub x1, x1, #8
+    cbz x3, bss_cleared
+    str x4, [x2], #8
+    sub x3, x3, #8
     b clear_bss
 
 bss_cleared:
-    // Jump to kernel main
-    bl kernel_main
+    // Call C bootloader main (preserve UEFI parameters)
+    // x0 = image_handle, x1 = system_table
+    bl _start_c
     
     // Should never return, but halt if it does
 halt:
