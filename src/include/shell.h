@@ -1,8 +1,7 @@
 #ifndef SHELL_H
 #define SHELL_H
 
-#include <stdint.h>
-#include <stddef.h>
+// Use kernel.h which properly handles cross-compilation
 #include "kernel.h"
 #include "vfs.h"
 #include "fd.h"

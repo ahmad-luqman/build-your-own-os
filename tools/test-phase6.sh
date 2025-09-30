@@ -71,8 +71,8 @@ fi
 # Shell Header Tests
 echo -e "${PURPLE}📄 Shell Header Tests${NC}"
 run_test "Shell header exists" "test -f '$SRC_DIR/include/shell.h'"
-run_test "Shell header compiles (ARM64)" "echo '#include \"shell.h\"' | aarch64-elf-gcc -I'$SRC_DIR/include' -x c - -c -o /dev/null"
-run_test "Shell header compiles (x86-64)" "echo '#include \"shell.h\"' | x86_64-elf-gcc -I'$SRC_DIR/include' -x c - -c -o /dev/null"
+run_test "Shell header compiles (ARM64)" "echo '#include \"shell.h\"' | aarch64-elf-gcc -ffreestanding -nostdlib -nostartfiles -nodefaultlibs -I'$SRC_DIR/include' -I'$SRC_DIR/arch/arm64/include' -x c - -c -o /dev/null"
+run_test "Shell header compiles (x86-64)" "echo '#include \"shell.h\"' | x86_64-elf-gcc -ffreestanding -nostdlib -nostartfiles -nodefaultlibs -I'$SRC_DIR/include' -I'$SRC_DIR/arch/x86_64/include' -x c - -c -o /dev/null"
 
 # Shell Implementation Tests
 echo -e "${PURPLE}🔧 Shell Implementation Tests${NC}"
