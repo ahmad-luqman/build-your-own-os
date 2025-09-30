@@ -149,8 +149,16 @@ void kernel_main(struct boot_info *boot_info)
     // Test UART functionality
     uart_test_output();
     
-    // TODO: Initialize interrupt management (Phase 4 continued)
-    early_print("TODO: Interrupt management initialization\n");
+    // Initialize interrupt management
+    if (interrupt_init() < 0) {
+        kernel_panic("Interrupt subsystem initialization failed");
+    }
+    
+    // Test interrupt functionality
+    show_interrupt_controllers();
+    
+    // TODO: Initialize process management (Phase 4 continued)
+    early_print("TODO: Process management initialization\n");
     
     // TODO: Initialize process management (Phase 4 continued)
     early_print("TODO: Process management initialization\n");

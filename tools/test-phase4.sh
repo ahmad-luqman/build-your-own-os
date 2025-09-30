@@ -76,8 +76,9 @@ echo "Phase 4 Test Categories:"
 echo "1. Device Driver Framework"
 echo "2. Timer Services"
 echo "3. UART Communication Drivers"
-echo "4. Build System Integration"
-echo "5. Cross-platform Compatibility"
+echo "4. Interrupt Management"
+echo "5. Build System Integration"
+echo "6. Cross-platform Compatibility"
 echo ""
 
 # Test 1: Device Driver Framework
@@ -173,11 +174,12 @@ run_test "Phase 4 includes in kernel header" "grep -q 'device.h' src/include/ker
 
 run_test "Device initialization in kernel main" "grep -q 'device_init' src/kernel/main.c"
 
-run_test "UART initialization in kernel main" "grep -q 'uart_init' src/kernel/main.c"
+run_test "Interrupt initialization in kernel main" "grep -q 'interrupt_init' src/kernel/main.c"
 
 # Clean up temporary files
 rm -f /tmp/device_arm64.o /tmp/driver_x86_64.o /tmp/timer_arm64.o /tmp/arm64_timer.o /tmp/x86_64_timer.o
 rm -f /tmp/device_discovery_arm64.o /tmp/device_discovery_x86_64.o /tmp/uart_arm64.o /tmp/pl011_uart.o /tmp/16550_uart.o
+rm -f /tmp/interrupt_arm64.o /tmp/gic_interrupt.o /tmp/pic_interrupt.o /tmp/idt_interrupt.o
 
 print_summary
 

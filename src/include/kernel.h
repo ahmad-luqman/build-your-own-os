@@ -41,6 +41,7 @@
 #include "driver.h"
 #include "timer.h"
 #include "uart.h"
+#include "interrupt.h"
 
 // Function declarations
 void kernel_main(struct boot_info *boot_info);
@@ -53,6 +54,10 @@ void test_memory_allocation(void);
 // Phase 4 function declarations (from uart.c)
 void uart_test_output(void);
 void uart_show_devices(void);
+
+// Phase 4 function declarations (from interrupt.c)
+void show_interrupt_stats(void);
+void show_interrupt_controllers(void);
 
 // Architecture-specific functions (implemented in arch/)
 void arch_init(void);
