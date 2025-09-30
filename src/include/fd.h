@@ -64,6 +64,9 @@ int fd_count_open(struct fd_table *table);
 // Standard file descriptor setup
 int fd_setup_stdio(void);
 
+// Get current process file descriptor table
+struct fd_table *fd_get_current_table(void);
+
 #ifdef __cplusplus
 }
 #endif

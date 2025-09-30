@@ -305,3 +305,32 @@ void memory_show_layout(struct boot_info *boot_info)
     
     early_print("=====================\n\n");
 }
+
+// Simple memory allocation for shell (basic implementation)
+// In a real OS, this would use a proper heap allocator
+
+static char simple_heap[64 * 1024];  // 64KB static heap
+static size_t heap_offset = 0;
+
+void *kmalloc(size_t size) {
+    // Simple bump allocator
+    if (size == 0) return NULL;
+    
+    // Align to 8 bytes
+    size = (size + 7) & ~7;
+    
+    if (heap_offset + size > sizeof(simple_heap)) {
+        return NULL;  // Out of memory
+    }
+    
+    void *ptr = &simple_heap[heap_offset];
+    heap_offset += size;
+    
+    return ptr;
+}
+
+void kfree(void *ptr) {
+    // Simple allocator doesn't support freeing individual blocks
+    // In a real implementation, this would maintain a free list
+    (void)ptr;  // Suppress warning
+}

@@ -8,9 +8,9 @@
 typedef long ssize_t;
 typedef long off_t;
 
-// Memory allocation aliases for filesystem (compatibility)
-#define kmalloc(size) memory_alloc(size, 0)
-#define kfree(ptr) memory_free(ptr)
+// Memory allocation functions (declared here, implemented in memory.c)
+void *kmalloc(size_t size);
+void kfree(void *ptr);
 int strlen(const char *str);
 int strcmp(const char *s1, const char *s2);
 int strncmp(const char *s1, const char *s2, size_t n);
@@ -80,6 +80,10 @@ void uart_show_devices(void);
 // Phase 4 function declarations (from interrupt.c)
 void show_interrupt_stats(void);
 void show_interrupt_controllers(void);
+
+// Memory allocation functions (simple implementations for shell)
+void *kmalloc(size_t size);
+void kfree(void *ptr);
 
 // Architecture-specific functions (implemented in arch/)
 void arch_init(void);
