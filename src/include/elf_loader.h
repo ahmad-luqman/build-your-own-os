@@ -11,6 +11,9 @@ extern "C" {
 // Use existing ELF definitions from kernel_loader.h
 #include "kernel_loader.h"
 
+// Forward declaration for advanced ELF context
+struct elf_advanced_context;
+
 // User program structure
 struct user_program {
     char name[64];                  // Program name
@@ -41,6 +44,11 @@ struct user_program {
     // Process state
     int exit_code;                  // Exit code
     int status;                     // Process status
+    
+    // Enhanced ELF support (Phase 8.1)
+    struct elf_advanced_context *elf_context;  // Advanced ELF context
+    void **shared_libraries;        // Array of loaded shared libraries
+    int library_count;              // Number of loaded libraries
 };
 
 // Program status values
@@ -65,6 +73,9 @@ int user_program_wait(uint32_t pid, int *status);
 int program_create(const char *path, int argc, char *argv[], struct user_program *program);
 int program_execute(struct user_program *program);
 void program_cleanup(struct user_program *program);
+
+// Enhanced program loading (Phase 8.1)
+int program_load_enhanced(const char *path, struct user_program *program);
 
 // Memory management for user programs
 void *user_alloc_pages(size_t size);

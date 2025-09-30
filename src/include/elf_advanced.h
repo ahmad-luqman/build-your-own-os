@@ -8,6 +8,11 @@
 extern "C" {
 #endif
 
+// Additional ELF constants
+#define EM_X86_64       62          // AMD x86-64 architecture  
+#define EM_AARCH64      183         // ARM AArch64 architecture
+#define SHN_UNDEF       0           // Undefined section
+
 // Extended ELF structures for full parsing
 
 // ELF section header

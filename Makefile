@@ -163,16 +163,36 @@ help:
 	@echo "  make DEBUG=1 test       # Debug build and test"
 	@echo "  make clean all          # Clean build"
 
-# Phase 7: User programs
-USER_PROGRAMS = hello calc cat ls tictactoe more head tail top kill
+# Phase 7: User programs  
+USER_PROGRAMS = hello calc calc_enhanced edit cat ls tictactoe more head tail top kill
 USER_PROGRAM_SOURCES = $(wildcard $(SRC_DIR)/userland/bin/*.c) $(wildcard $(SRC_DIR)/userland/utils/*.c) $(wildcard $(SRC_DIR)/userland/games/*.c)
 USER_PROGRAM_OBJECTS = $(USER_PROGRAM_SOURCES:$(SRC_DIR)/%.c=$(BUILD_DIR)/$(ARCH)/%.o)
 
+# Phase 8.1: MiniOS C Library
+LIBC_SOURCES = $(wildcard $(SRC_DIR)/userland/lib/minios_libc/*/*.c)
+LIBC_OBJECTS = $(LIBC_SOURCES:$(SRC_DIR)/%.c=$(BUILD_DIR)/$(ARCH)/%.o)
+LIBC_ARCHIVE = $(BUILD_DIR)/$(ARCH)/libminios.a
+
 # User program build (simplified - not full ELF for now)
-userland: programs
+userland: programs libc
 
 programs: $(USER_PROGRAMS:%=$(BUILD_DIR)/$(ARCH)/userland/%)
 	@echo "User programs built for $(ARCH)"
+
+# Phase 8.1: Build MiniOS C Library
+libc: $(LIBC_ARCHIVE)
+	@echo "MiniOS C library built for $(ARCH)"
+
+$(LIBC_ARCHIVE): $(LIBC_OBJECTS)
+	@mkdir -p $(dir $@)
+	@echo "Creating MiniOS C library archive..."
+	$(AR) rcs $@ $^
+
+# Compile library sources
+$(BUILD_DIR)/$(ARCH)/userland/lib/minios_libc/%.o: $(SRC_DIR)/userland/lib/minios_libc/%.c
+	@mkdir -p $(dir $@)
+	@echo "Compiling library: $<"
+	$(CC) $(CFLAGS) -I$(SRC_DIR)/userland/lib/minios_libc -c $< -o $@
 
 # Individual user program targets
 $(BUILD_DIR)/$(ARCH)/userland/hello: $(SRC_DIR)/userland/bin/hello.c
@@ -185,6 +205,19 @@ $(BUILD_DIR)/$(ARCH)/userland/calc: $(SRC_DIR)/userland/bin/calc.c
 	@mkdir -p $(dir $@)
 	@echo "Building user program: calc"
 	@echo "// Calculator program built for $(ARCH)" > $@
+
+$(BUILD_DIR)/$(ARCH)/userland/calc_enhanced: $(SRC_DIR)/userland/bin/calc_enhanced.c $(LIBC_ARCHIVE)
+	@mkdir -p $(dir $@)
+	@echo "Building enhanced calculator with MiniOS C library"
+	@# Create a simple stub - actual ELF compilation would need cross-compiler
+	@echo "// Enhanced Calculator program built for $(ARCH)" > $@
+	@echo "// Uses MiniOS C library" >> $@
+
+$(BUILD_DIR)/$(ARCH)/userland/edit: $(SRC_DIR)/userland/bin/edit.c $(LIBC_ARCHIVE)
+	@mkdir -p $(dir $@)
+	@echo "Building text editor with MiniOS C library"
+	@echo "// Text Editor program built for $(ARCH)" > $@
+	@echo "// Uses MiniOS C library" >> $@
 
 $(BUILD_DIR)/$(ARCH)/userland/cat: $(SRC_DIR)/userland/utils/cat.c
 	@mkdir -p $(dir $@)

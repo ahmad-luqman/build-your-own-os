@@ -1,4 +1,5 @@
 #include "elf_loader.h"
+#include "elf_advanced.h"
 #include "memory.h"
 #include "vfs.h"
 #include "process.h"
@@ -159,7 +160,7 @@ int setup_program_arguments(struct user_program *program, int argc, char *argv[]
     }
     
     // Allocate argv array
-    program->argv = kmalloc(sizeof(char *) * (argc + 1));
+    program->argv = memory_alloc(sizeof(char *) * (argc + 1), 8);
     if (!program->argv) {
         return USER_PROGRAM_ERROR_NO_MEMORY;
     }
@@ -167,13 +168,13 @@ int setup_program_arguments(struct user_program *program, int argc, char *argv[]
     // Copy argument strings
     for (int i = 0; i < argc; i++) {
         int len = strlen(argv[i]) + 1;
-        program->argv[i] = kmalloc(len);
+        program->argv[i] = memory_alloc(len, 8);
         if (!program->argv[i]) {
             // Clean up on failure
             for (int j = 0; j < i; j++) {
-                kfree(program->argv[j]);
+                memory_free(program->argv[j]);
             }
-            kfree(program->argv);
+            memory_free(program->argv);
             program->argv = NULL;
             return USER_PROGRAM_ERROR_NO_MEMORY;
         }
@@ -192,26 +193,38 @@ void cleanup_program_arguments(struct user_program *program) {
     
     for (int i = 0; i < program->argc; i++) {
         if (program->argv[i]) {
-            kfree(program->argv[i]);
+            memory_free(program->argv[i]);
         }
     }
     
-    kfree(program->argv);
+    memory_free(program->argv);
     program->argv = NULL;
     program->argc = 0;
+}
+
+// Enhanced program loading with advanced ELF support
+int program_load_enhanced(const char *path, struct user_program *program) {
+    // Try advanced ELF loading first
+    int result = program_load_advanced(path, program);
+    if (result == ELF_ADV_SUCCESS) {
+        return 0;  // Success
+    }
+    
+    // Fall back to basic loading
+    return user_program_load(path, program);
 }
 
 // Utility functions for memory management
 void *user_alloc_pages(size_t size) {
     // Align size to page boundary
     size = (size + 0xFFF) & ~0xFFF;
-    return kmalloc(size);
+    return memory_alloc(size, 0x1000);  // Page-aligned allocation
 }
 
 void user_free_pages(void *addr, size_t size) {
     (void)size;  // Suppress unused parameter warning
     if (addr) {
-        kfree(addr);
+        memory_free(addr);
     }
 }
 
