@@ -10,6 +10,7 @@
 #include "sfs.h"
 #include "block_device.h"
 #include "fd.h"
+#include "shell.h"
 
 void kernel_main(struct boot_info *boot_info)
 {
@@ -226,19 +227,38 @@ void kernel_main(struct boot_info *boot_info)
     vfs_dump_info();
     block_device_list_all();
     
+    // Phase 6: Initialize shell system
+    early_print("Phase 6: Initializing user interface...\n");
+    
+    // Initialize shell system
+    if (shell_init_system() != SHELL_SUCCESS) {
+        early_print("Failed to initialize shell system\n");
+        arch_halt();
+    }
+    
+    // Register shell-related system calls
+    register_shell_syscalls();
+    early_print("Shell system calls registered\n");
+    
     early_print("Kernel initialization complete!\n");
-    early_print("MiniOS is ready (Phase 5 - File System)\n");
+    early_print("MiniOS is ready (Phase 6 - User Interface)\n");
     
     // Create initial system tasks
-    early_print("Creating initial system tasks...\n");
+    early_print("Starting interactive shell...\n");
     
-    // Create init task (higher priority)
-    int init_pid = process_create(init_task, NULL, "init", PRIORITY_NORMAL);
+    // Create shell task as primary user interface (replaces simple init task)
+    int shell_pid = process_create(shell_main_task, NULL, "shell", PRIORITY_NORMAL);
+    if (shell_pid < 0) {
+        kernel_panic("Failed to create shell process");
+    }
+    
+    // Create a simple background init task for system maintenance
+    int init_pid = process_create(init_task, NULL, "init", PRIORITY_LOW);
     if (init_pid < 0) {
         kernel_panic("Failed to create init task");
     }
     
-    early_print("Starting scheduler with system services...\n");
+    early_print("Starting scheduler with shell interface...\n");
     
     // Enable system call tracing for debugging
     syscall_enable_tracing(1);

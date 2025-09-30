@@ -495,3 +495,9 @@ int fd_setup_stdio(void)
     early_print("Standard file descriptors allocated\n");
     return VFS_SUCCESS;
 }
+
+// Public function to get current fd table
+struct fd_table *fd_get_current_table(void)
+{
+    return get_current_fd_table();
+}

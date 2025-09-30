@@ -21,6 +21,15 @@ extern "C" {
 #define SYSCALL_CLOSE       9
 #define SYSCALL_SEEK        10
 
+// Shell-related system calls
+#define SYSCALL_GETCWD      16  // Get current working directory
+#define SYSCALL_CHDIR       17  // Change directory  
+#define SYSCALL_STAT        18  // Get file/directory information
+#define SYSCALL_READDIR     19  // Read directory entries
+#define SYSCALL_EXEC        20  // Execute program
+#define SYSCALL_WAIT        21  // Wait for process
+#define SYSCALL_FORK        22  // Create new process (future)
+
 #define MAX_SYSCALLS        64
 
 // System call error codes
@@ -68,6 +77,13 @@ long syscall_getpid(long unused0, long unused1, long unused2, long unused3, long
 long syscall_sleep(long ticks, long unused1, long unused2, long unused3, long unused4, long unused5);
 long syscall_yield(long unused0, long unused1, long unused2, long unused3, long unused4, long unused5);
 long syscall_gettime(long time_ptr, long unused1, long unused2, long unused3, long unused4, long unused5);
+
+// Shell-related system call handlers
+long syscall_getcwd(long buf_ptr, long size, long unused2, long unused3, long unused4, long unused5);
+long syscall_chdir(long path_ptr, long unused1, long unused2, long unused3, long unused4, long unused5);
+long syscall_stat(long path_ptr, long stat_buf_ptr, long unused2, long unused3, long unused4, long unused5);
+long syscall_readdir(long fd, long entries_ptr, long count, long unused3, long unused4, long unused5);
+long syscall_exec(long path_ptr, long argv_ptr, long unused2, long unused3, long unused4, long unused5);
 
 // Architecture-specific system call entry points
 #ifdef __aarch64__
