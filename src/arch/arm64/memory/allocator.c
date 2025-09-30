@@ -8,8 +8,11 @@
 #include "memory.h"
 #include "boot_protocol.h"
 
-// Memory allocation bitmap
-#define MAX_PAGES           16384       // Support up to 64MB of 4KB pages
+// Add forward declaration for early_print
+void early_print(const char *str);
+
+// Memory allocation bitmap  
+#define MAX_PAGES           4096        // Support up to 16MB of 4KB pages (sufficient for Phase 3)
 #define BITMAP_SIZE         (MAX_PAGES / 8)
 static uint8_t page_bitmap[BITMAP_SIZE];
 static uint64_t total_pages = 0;

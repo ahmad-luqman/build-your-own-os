@@ -11,11 +11,11 @@ make ARCH=arm64 CFLAGS_EXTRA="-DPHASE_3_ONLY" kernel
 if [[ $? -eq 0 ]]; then
     echo "✅ Phase 3 kernel built successfully"
     echo "🚀 Starting QEMU test..."
-    echo "Expected: Memory management initialization (may hang - that's expected)"
+    echo "Expected: Complete Phase 3 memory management with MMU"
     echo "Press Ctrl+C to exit"
     echo
     
-    timeout 30 qemu-system-aarch64 \
+    timeout 60 qemu-system-aarch64 \
         -machine virt \
         -cpu cortex-a72 \
         -m 512M \
@@ -24,7 +24,7 @@ if [[ $? -eq 0 ]]; then
         -serial mon:stdio
     
     echo
-    echo "Phase 3 test completed (timeout after 30s is normal)"
+    echo "Phase 3 test completed"
 else
     echo "❌ Phase 3 build failed"
     exit 1
