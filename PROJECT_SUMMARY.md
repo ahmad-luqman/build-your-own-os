@@ -47,8 +47,9 @@ build-your-own-os/
 ### 🎯 Project Goals
 Build a minimal, educational operating system that:
 - ✅ Supports ARM64 (UTM on macOS) and x86-64 architectures
-- ⏳ Provides basic memory and process management
-- ⏳ Implements a simple shell interface  
+- ✅ Provides basic memory and process management
+- ✅ Implements file system with storage management
+- ⏳ Provides a simple shell interface  
 - ⏳ Can run basic CLI applications
 - ✅ Serves as a comprehensive learning platform
 
