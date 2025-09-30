@@ -36,18 +36,23 @@ LDFLAGS = -nostdlib -static
 # Source files for kernel (exclude bootloader files)
 KERNEL_C_SOURCES = $(wildcard $(SRC_DIR)/kernel/*.c)
 KERNEL_C_SOURCES += $(filter-out %boot_main.c %uefi_boot.c, $(wildcard $(SRC_DIR)/arch/$(ARCH)/*.c))
+KERNEL_C_SOURCES += $(wildcard $(SRC_DIR)/arch/$(ARCH)/memory/*.c)
+KERNEL_C_SOURCES += $(wildcard $(SRC_DIR)/arch/$(ARCH)/interrupts/*.c)
+KERNEL_C_SOURCES += $(wildcard $(SRC_DIR)/arch/$(ARCH)/kernel_loader/*.c)
 KERNEL_C_SOURCES += $(wildcard $(SRC_DIR)/drivers/*.c)
 
 # Assembly sources for kernel (exclude bootloader entry points)
-KERNEL_ASM_SOURCES = $(filter-out %boot.S %boot.asm, $(wildcard $(SRC_DIR)/arch/$(ARCH)/*.S))
-KERNEL_ASM_SOURCES += $(filter-out %boot.S %boot.asm, $(wildcard $(SRC_DIR)/arch/$(ARCH)/*.asm))
+KERNEL_S_SOURCES = $(filter-out %boot.S, $(wildcard $(SRC_DIR)/arch/$(ARCH)/*.S))
+KERNEL_S_SOURCES += $(wildcard $(SRC_DIR)/arch/$(ARCH)/interrupts/*.S)
+KERNEL_ASM_SOURCES = $(filter-out %boot.asm, $(wildcard $(SRC_DIR)/arch/$(ARCH)/*.asm))
+KERNEL_ASM_SOURCES += $(wildcard $(SRC_DIR)/arch/$(ARCH)/interrupts/*.asm)
 
 # Object files
 KERNEL_C_OBJECTS = $(KERNEL_C_SOURCES:$(SRC_DIR)/%.c=$(BUILD_DIR)/$(ARCH)/%.o)
-KERNEL_ASM_OBJECTS = $(KERNEL_ASM_SOURCES:$(SRC_DIR)/%.S=$(BUILD_DIR)/$(ARCH)/%.o)
-KERNEL_ASM_OBJECTS += $(KERNEL_ASM_SOURCES:$(SRC_DIR)/%.asm=$(BUILD_DIR)/$(ARCH)/%.o)
+KERNEL_S_OBJECTS = $(KERNEL_S_SOURCES:$(SRC_DIR)/%.S=$(BUILD_DIR)/$(ARCH)/%.o)
+KERNEL_ASM_OBJECTS = $(KERNEL_ASM_SOURCES:$(SRC_DIR)/%.asm=$(BUILD_DIR)/$(ARCH)/%.o)
 
-ALL_OBJECTS = $(KERNEL_C_OBJECTS) $(KERNEL_ASM_OBJECTS)
+ALL_OBJECTS = $(KERNEL_C_OBJECTS) $(KERNEL_S_OBJECTS) $(KERNEL_ASM_OBJECTS)
 
 # Dependency files
 DEPS = $(KERNEL_C_OBJECTS:.o=.d)
@@ -139,3 +144,4 @@ help:
 	@echo "  make ARCH=x86_64        # Build for x86-64"
 	@echo "  make DEBUG=1 test       # Debug build and test"
 	@echo "  make clean all          # Clean build"
+
