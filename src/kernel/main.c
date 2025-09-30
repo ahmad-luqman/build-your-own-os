@@ -4,6 +4,8 @@
  */
 
 #include "kernel.h"
+#include "process.h"
+#include "syscall.h"
 
 void kernel_main(struct boot_info *boot_info)
 {
@@ -157,23 +159,41 @@ void kernel_main(struct boot_info *boot_info)
     // Test interrupt functionality
     show_interrupt_controllers();
     
-    // TODO: Initialize process management (Phase 4 continued)
-    early_print("TODO: Process management initialization\n");
+    // Initialize process management
+    if (process_init() < 0) {
+        kernel_panic("Process management initialization failed");
+    }
     
-    // TODO: Initialize process management (Phase 4 continued)
-    early_print("TODO: Process management initialization\n");
+    // Initialize scheduler
+    scheduler_init();
     
-    // TODO: Initialize system call interface (Phase 4 continued)
-    early_print("TODO: System call interface initialization\n");
-    
-    // TODO: Start shell (Phase 6)
-    early_print("TODO: Shell initialization (Phase 6)\n");
+    // Initialize system call interface
+    if (syscall_init() < 0) {
+        kernel_panic("System call interface initialization failed");
+    }
     
     early_print("Kernel initialization complete!\n");
     early_print("MiniOS is ready (Phase 4 - Device Drivers & System Services)\n");
     
-    // For now, just halt - later we'll start a shell
-    early_print("Halting system (no shell yet)...\n");
+    // Create initial system tasks
+    early_print("Creating initial system tasks...\n");
+    
+    // Create init task (higher priority)
+    int init_pid = process_create(init_task, NULL, "init", PRIORITY_NORMAL);
+    if (init_pid < 0) {
+        kernel_panic("Failed to create init task");
+    }
+    
+    early_print("Starting scheduler with system services...\n");
+    
+    // Enable system call tracing for debugging
+    syscall_enable_tracing(1);
+    
+    // Start the scheduler - this should not return
+    scheduler_start();
+    
+    // Should never reach here
+    early_print("ERROR: Scheduler returned unexpectedly\n");
     arch_halt();
 }
 

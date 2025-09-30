@@ -48,6 +48,9 @@ void kernel_main(struct boot_info *boot_info);
 void kernel_panic(const char *message);
 void early_print(const char *str);
 
+// Utility functions
+char *itoa(int value, char *str, int base);
+
 // Phase 3 function declarations
 void test_memory_allocation(void);
 
