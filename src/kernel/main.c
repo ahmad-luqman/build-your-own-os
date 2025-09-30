@@ -81,20 +81,27 @@ void kernel_main(struct boot_info *boot_info)
     early_print("Debug build - verbose logging enabled\n");
 #endif
     
-    // TODO: Initialize memory management
-    early_print("TODO: Memory management initialization\n");
+    // Phase 3: Initialize memory management
+    if (memory_init(boot_info) < 0) {
+        kernel_panic("Memory management initialization failed");
+    }
     
-    // TODO: Initialize process management  
-    early_print("TODO: Process management initialization\n");
+    // Phase 3: Initialize exception handling
+    if (exception_init() < 0) {
+        kernel_panic("Exception handling initialization failed");
+    }
     
-    // TODO: Initialize device drivers
-    early_print("TODO: Device driver initialization\n");
+    // Phase 3: Test memory allocation
+    test_memory_allocation();
     
-    // TODO: Start shell
-    early_print("TODO: Shell initialization\n");
+    // TODO: Initialize device drivers (Phase 4)
+    early_print("TODO: Device driver initialization (Phase 4)\n");
+    
+    // TODO: Start shell (Phase 6)
+    early_print("TODO: Shell initialization (Phase 6)\n");
     
     early_print("Kernel initialization complete!\n");
-    early_print("MiniOS is ready (Phase 2 - Enhanced bootloader)\n");
+    early_print("MiniOS is ready (Phase 3 - Memory Management & Kernel Loading)\n");
     
     // For now, just halt - later we'll start a shell
     early_print("Halting system (no shell yet)...\n");
