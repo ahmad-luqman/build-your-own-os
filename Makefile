@@ -58,9 +58,13 @@ KERNEL_C_SOURCES += $(wildcard $(SRC_DIR)/shell/parser/*.c)
 KERNEL_C_SOURCES += $(wildcard $(SRC_DIR)/shell/advanced/*.c)
 
 # Assembly sources for kernel (exclude bootloader entry points)
-KERNEL_S_SOURCES = $(filter-out %boot.S, $(wildcard $(SRC_DIR)/arch/$(ARCH)/*.S))
+KERNEL_S_SOURCES = $(filter-out %boot.S %kernel_start.S, $(wildcard $(SRC_DIR)/arch/$(ARCH)/*.S))
 KERNEL_S_SOURCES += $(wildcard $(SRC_DIR)/arch/$(ARCH)/interrupts/*.S)
 KERNEL_S_SOURCES += $(wildcard $(SRC_DIR)/arch/$(ARCH)/process/*.S)
+# Add kernel entry point for direct boot (only for ARM64)
+ifeq ($(ARCH),arm64)
+KERNEL_S_SOURCES += $(SRC_DIR)/arch/arm64/kernel_start.S
+endif
 KERNEL_ASM_SOURCES = $(filter-out %boot.asm, $(wildcard $(SRC_DIR)/arch/$(ARCH)/*.asm))
 KERNEL_ASM_SOURCES += $(wildcard $(SRC_DIR)/arch/$(ARCH)/interrupts/*.asm)
 KERNEL_ASM_SOURCES += $(wildcard $(SRC_DIR)/arch/$(ARCH)/process/*.asm)

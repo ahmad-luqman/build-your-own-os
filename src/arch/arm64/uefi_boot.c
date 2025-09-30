@@ -35,12 +35,24 @@ static void strcpy_simple(char* dest, const char* src) {
 
 // UEFI entry point
 EFI_STATUS uefi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table) {
+    // Output early debug message
+    volatile uint32_t *uart = (volatile uint32_t *)0x9000000;
+    char start_msg[] = "UEFI: Starting bootloader...\n";
+    for (int i = 0; start_msg[i]; i++) {
+        *uart = start_msg[i];
+    }
+    
     // Initialize boot info structures
     for (size_t i = 0; i < sizeof(g_boot_info); i++) {
         ((char*)&g_boot_info)[i] = 0;
     }
     for (size_t i = 0; i < sizeof(g_arm64_boot_info); i++) {
         ((char*)&g_arm64_boot_info)[i] = 0;
+    }
+    
+    char setup_msg[] = "UEFI: Setting up boot info...\n";
+    for (int i = 0; setup_msg[i]; i++) {
+        *uart = setup_msg[i];
     }
     
     // Set up basic information
@@ -55,13 +67,26 @@ EFI_STATUS uefi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table) {
     // Get memory map (simplified for now)
     EFI_STATUS status = get_memory_map(&g_arm64_boot_info);
     if (status != EFI_SUCCESS) {
+        char mem_error[] = "UEFI: Memory map failed\n";
+        for (int i = 0; mem_error[i]; i++) {
+            *uart = mem_error[i];
+        }
         return status;
+    }
+    
+    char mem_ok[] = "UEFI: Memory map OK\n";
+    for (int i = 0; mem_ok[i]; i++) {
+        *uart = mem_ok[i];
     }
     
     // Set up graphics (simplified for now)
     status = setup_graphics(&g_arm64_boot_info);
     if (status != EFI_SUCCESS) {
         // Graphics failure is not fatal, continue
+        char gfx_warn[] = "UEFI: Graphics setup failed (non-fatal)\n";
+        for (int i = 0; gfx_warn[i]; i++) {
+            *uart = gfx_warn[i];
+        }
     }
     
     // Set up unified boot info
@@ -70,10 +95,19 @@ EFI_STATUS uefi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table) {
     // Set default command line
     strcpy_simple(g_boot_info.cmdline, "console=uart,mmio,0x9000000");
     
+    char kernel_msg[] = "UEFI: Transferring to kernel...\n";
+    for (int i = 0; kernel_msg[i]; i++) {
+        *uart = kernel_msg[i];
+    }
+    
     // Transfer to kernel
     transfer_to_kernel(&g_boot_info);
     
     // Should never return
+    char error_msg[] = "UEFI: Transfer failed!\n";
+    for (int i = 0; error_msg[i]; i++) {
+        *uart = error_msg[i];
+    }
     return EFI_LOAD_ERROR;
 }
 
@@ -124,19 +158,41 @@ void setup_boot_info(struct boot_info *boot_info, struct boot_info_arm64 *arm64_
 }
 
 void transfer_to_kernel(struct boot_info *boot_info) {
-    // Suppress unused parameter warning
-    (void)boot_info;
+    // For direct kernel loading via QEMU, we'll assume the kernel
+    // is already loaded at the expected address and jump to it
     
-    // In a real bootloader, we'd:
-    // 1. Load kernel ELF from storage
-    // 2. Exit UEFI boot services  
-    // 3. Set up MMU
-    // 4. Jump to kernel entry point
+    // Kernel load address (should match linker script)
+    void (*kernel_entry)(struct boot_info *) = (void (*)(struct boot_info *))0x40080000;
     
-    // For now, just demonstrate we have the boot info
-    // The actual kernel loading will be implemented in Phase 3
+    // Simple output before transfer
+    // UART at 0x9000000 for QEMU virt machine
+    volatile uint32_t *uart = (volatile uint32_t *)0x9000000;
     
-    // Halt - in a real implementation we'd jump to loaded kernel
+    // Output boot message
+    char msg[] = "UEFI: Transferring to kernel...\n";
+    for (int i = 0; msg[i]; i++) {
+        *uart = msg[i];
+    }
+    
+    // Make sure boot_info is properly set up
+    if (!boot_info || !boot_info_valid(boot_info)) {
+        char error[] = "UEFI: Invalid boot info!\n";
+        for (int i = 0; error[i]; i++) {
+            *uart = error[i];
+        }
+        while (1) {
+            __asm__ volatile("wfi");
+        }
+    }
+    
+    // Transfer control to kernel 
+    kernel_entry(boot_info);
+    
+    // Should never reach here
+    char never[] = "UEFI: Kernel returned unexpectedly!\n";
+    for (int i = 0; never[i]; i++) {
+        *uart = never[i];
+    }
     while (1) {
         __asm__ volatile("wfi");
     }
