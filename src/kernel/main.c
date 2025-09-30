@@ -6,6 +6,10 @@
 #include "kernel.h"
 #include "process.h"
 #include "syscall.h"
+#include "vfs.h"
+#include "sfs.h"
+#include "block_device.h"
+#include "fd.h"
 
 void kernel_main(struct boot_info *boot_info)
 {
@@ -172,8 +176,58 @@ void kernel_main(struct boot_info *boot_info)
         kernel_panic("System call interface initialization failed");
     }
     
+    // Phase 5: File system initialization
+    early_print("Phase 5: Initializing file system...\n");
+    
+    // Initialize block device layer
+    if (block_device_init() != BLOCK_SUCCESS) {
+        kernel_panic("Block device layer initialization failed");
+    }
+    
+    // Initialize Virtual File System
+    if (vfs_init() != VFS_SUCCESS) {
+        kernel_panic("VFS initialization failed");
+    }
+    
+    // Initialize Simple File System
+    if (sfs_init() != VFS_SUCCESS) {
+        kernel_panic("SFS initialization failed");
+    }
+    
+    // Initialize file descriptor system
+    if (fd_init() != VFS_SUCCESS) {
+        kernel_panic("File descriptor system initialization failed");
+    }
+    
+    // Create and format RAM disk for testing
+    struct block_device *ramdisk = ramdisk_create("ram0", 1024 * 1024);  // 1MB
+    if (!ramdisk) {
+        kernel_panic("Failed to create RAM disk");
+    }
+    
+    // Format RAM disk with SFS
+    if (sfs_format(ramdisk) != VFS_SUCCESS) {
+        kernel_panic("Failed to format RAM disk with SFS");
+    }
+    
+    // Mount RAM disk as root filesystem
+    if (vfs_mount("ram0", "/", "sfs", 0) != VFS_SUCCESS) {
+        kernel_panic("Failed to mount root filesystem");
+    }
+    
+    // Setup standard file descriptors
+    if (fd_setup_stdio() != VFS_SUCCESS) {
+        early_print("Warning: Failed to setup standard file descriptors\n");
+        // Non-fatal, continue
+    }
+    
+    // Display file system information
+    early_print("File system ready!\n");
+    vfs_dump_info();
+    block_device_list_all();
+    
     early_print("Kernel initialization complete!\n");
-    early_print("MiniOS is ready (Phase 4 - Device Drivers & System Services)\n");
+    early_print("MiniOS is ready (Phase 5 - File System)\n");
     
     // Create initial system tasks
     early_print("Creating initial system tasks...\n");
