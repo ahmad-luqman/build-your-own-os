@@ -5,7 +5,7 @@
 #include <stddef.h>
 
 // Kernel configuration
-#define KERNEL_VERSION "0.1.0"
+#define KERNEL_VERSION "0.3.0"
 #define KERNEL_NAME "MiniOS"
 
 // Log levels
@@ -31,10 +31,18 @@
 // Include boot protocol
 #include "boot_protocol.h"
 
+// Phase 3 includes
+#include "memory.h"
+#include "exceptions.h"
+#include "kernel_loader.h"
+
 // Function declarations
 void kernel_main(struct boot_info *boot_info);
 void kernel_panic(const char *message);
 void early_print(const char *str);
+
+// Phase 3 function declarations
+void test_memory_allocation(void);
 
 // Architecture-specific functions (implemented in arch/)
 void arch_init(void);
