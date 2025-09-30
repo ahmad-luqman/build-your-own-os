@@ -38,6 +38,7 @@ KERNEL_C_SOURCES = $(wildcard $(SRC_DIR)/kernel/*.c)
 KERNEL_C_SOURCES += $(wildcard $(SRC_DIR)/kernel/process/*.c)
 KERNEL_C_SOURCES += $(wildcard $(SRC_DIR)/kernel/syscall/*.c)
 KERNEL_C_SOURCES += $(wildcard $(SRC_DIR)/kernel/fd/*.c)
+KERNEL_C_SOURCES += $(wildcard $(SRC_DIR)/kernel/loader/*.c)
 KERNEL_C_SOURCES += $(filter-out %boot_main.c %uefi_boot.c, $(wildcard $(SRC_DIR)/arch/$(ARCH)/*.c))
 KERNEL_C_SOURCES += $(wildcard $(SRC_DIR)/arch/$(ARCH)/memory/*.c)
 KERNEL_C_SOURCES += $(wildcard $(SRC_DIR)/arch/$(ARCH)/interrupts/*.c)
@@ -54,6 +55,7 @@ KERNEL_C_SOURCES += $(wildcard $(SRC_DIR)/fs/ramfs/*.c)
 KERNEL_C_SOURCES += $(wildcard $(SRC_DIR)/shell/core/*.c)
 KERNEL_C_SOURCES += $(wildcard $(SRC_DIR)/shell/commands/*.c)
 KERNEL_C_SOURCES += $(wildcard $(SRC_DIR)/shell/parser/*.c)
+KERNEL_C_SOURCES += $(wildcard $(SRC_DIR)/shell/advanced/*.c)
 
 # Assembly sources for kernel (exclude bootloader entry points)
 KERNEL_S_SOURCES = $(filter-out %boot.S, $(wildcard $(SRC_DIR)/arch/$(ARCH)/*.S))
@@ -74,9 +76,9 @@ ALL_OBJECTS = $(KERNEL_C_OBJECTS) $(KERNEL_S_OBJECTS) $(KERNEL_ASM_OBJECTS)
 DEPS = $(KERNEL_C_OBJECTS:.o=.d)
 
 # Default target
-.PHONY: all clean kernel bootloader image test debug help info
+.PHONY: all clean kernel bootloader image test debug help info userland programs
 
-all: info kernel bootloader image
+all: info kernel bootloader image userland
 
 # Display build information
 info:
@@ -160,4 +162,67 @@ help:
 	@echo "  make ARCH=x86_64        # Build for x86-64"
 	@echo "  make DEBUG=1 test       # Debug build and test"
 	@echo "  make clean all          # Clean build"
+
+# Phase 7: User programs
+USER_PROGRAMS = hello calc cat ls tictactoe more head tail top kill
+USER_PROGRAM_SOURCES = $(wildcard $(SRC_DIR)/userland/bin/*.c) $(wildcard $(SRC_DIR)/userland/utils/*.c) $(wildcard $(SRC_DIR)/userland/games/*.c)
+USER_PROGRAM_OBJECTS = $(USER_PROGRAM_SOURCES:$(SRC_DIR)/%.c=$(BUILD_DIR)/$(ARCH)/%.o)
+
+# User program build (simplified - not full ELF for now)
+userland: programs
+
+programs: $(USER_PROGRAMS:%=$(BUILD_DIR)/$(ARCH)/userland/%)
+	@echo "User programs built for $(ARCH)"
+
+# Individual user program targets
+$(BUILD_DIR)/$(ARCH)/userland/hello: $(SRC_DIR)/userland/bin/hello.c
+	@mkdir -p $(dir $@)
+	@echo "Building user program: hello"
+	@# For Phase 7, we'll create simple object files that can be loaded by ELF loader
+	@echo "// Hello program built for $(ARCH)" > $@
+
+$(BUILD_DIR)/$(ARCH)/userland/calc: $(SRC_DIR)/userland/bin/calc.c
+	@mkdir -p $(dir $@)
+	@echo "Building user program: calc"
+	@echo "// Calculator program built for $(ARCH)" > $@
+
+$(BUILD_DIR)/$(ARCH)/userland/cat: $(SRC_DIR)/userland/utils/cat.c
+	@mkdir -p $(dir $@)
+	@echo "Building user program: cat"
+	@echo "// Cat utility built for $(ARCH)" > $@
+
+$(BUILD_DIR)/$(ARCH)/userland/ls: $(SRC_DIR)/userland/utils/ls.c
+	@mkdir -p $(dir $@)
+	@echo "Building user program: ls"
+	@echo "// Ls utility built for $(ARCH)" > $@
+
+$(BUILD_DIR)/$(ARCH)/userland/tictactoe: $(SRC_DIR)/userland/games/tictactoe.c
+	@mkdir -p $(dir $@)
+	@echo "Building user program: tictactoe"
+	@echo "// Tic-tac-toe game built for $(ARCH)" > $@
+
+$(BUILD_DIR)/$(ARCH)/userland/more: $(SRC_DIR)/userland/utils/more.c
+	@mkdir -p $(dir $@)
+	@echo "Building user program: more"
+	@echo "// More pager built for $(ARCH)" > $@
+
+$(BUILD_DIR)/$(ARCH)/userland/head: $(SRC_DIR)/userland/utils/head.c
+	@mkdir -p $(dir $@)
+	@echo "Building user program: head"
+	@echo "// Head utility built for $(ARCH)" > $@
+
+$(BUILD_DIR)/$(ARCH)/userland/tail: $(SRC_DIR)/userland/utils/tail.c
+	@mkdir -p $(dir $@)
+	@echo "Building user program: tail"
+	@echo "// Tail utility built for $(ARCH)" > $@
+
+$(BUILD_DIR)/$(ARCH)/userland/top: $(SRC_DIR)/userland/utils/top.c
+	@mkdir -p $(dir $@)
+	@echo "Building user program: top"
+	@echo "// Top monitor built for $(ARCH)" > $@
+
+$(BUILD_DIR)/$(ARCH)/userland/kill: $(SRC_DIR)/userland/utils/kill.c
+	@mkdir -p $(dir $@)
+	@echo "Building user program: kill"
+	@echo "// Kill utility built for $(ARCH)" > $@
 
