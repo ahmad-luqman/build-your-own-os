@@ -94,14 +94,70 @@ void kernel_main(struct boot_info *boot_info)
     // Phase 3: Test memory allocation
     test_memory_allocation();
     
-    // TODO: Initialize device drivers (Phase 4)
-    early_print("TODO: Device driver initialization (Phase 4)\n");
+    // Phase 4: Initialize device drivers and system services
+    early_print("Phase 4: Initializing device drivers and system services...\n");
+    
+    // Initialize device subsystem
+    if (device_init(boot_info) < 0) {
+        kernel_panic("Device subsystem initialization failed");
+    }
+    
+    // Initialize timer services
+    if (timer_init() < 0) {
+        kernel_panic("Timer subsystem initialization failed");
+    }
+    
+    // Enable scheduler timer (basic scheduling support)
+    if (timer_enable_scheduler() < 0) {
+        early_print("Warning: Failed to enable timer scheduler\n");
+    }
+    
+    // Show device information
+    device_list_all();
+    
+    // Show timer information
+    struct timer_info timer_info;
+    timer_get_info(&timer_info);
+    early_print("Timer frequency: ");
+    
+    // Convert frequency to string for display
+    char freq_str[32];
+    int pos = 0;
+    uint64_t freq = timer_info.frequency;
+    if (freq == 0) {
+        freq_str[pos++] = '0';
+    } else {
+        char temp[32];
+        int temp_pos = 0;
+        while (freq > 0) {
+            temp[temp_pos++] = '0' + (freq % 10);
+            freq /= 10;
+        }
+        while (temp_pos > 0) {
+            freq_str[pos++] = temp[--temp_pos];
+        }
+    }
+    freq_str[pos] = 0;
+    early_print(freq_str);
+    early_print(" Hz\n");
+    
+    // TODO: Initialize UART drivers (Phase 4 continued)
+    early_print("TODO: UART driver initialization\n");
+    
+    // TODO: Initialize interrupt management (Phase 4 continued)
+    early_print("TODO: Interrupt management initialization\n");
+    
+    // TODO: Initialize process management (Phase 4 continued)
+    early_print("TODO: Process management initialization\n");
+    
+    // TODO: Initialize system call interface (Phase 4 continued)
+    early_print("TODO: System call interface initialization\n");
     
     // TODO: Start shell (Phase 6)
     early_print("TODO: Shell initialization (Phase 6)\n");
     
     early_print("Kernel initialization complete!\n");
-    early_print("MiniOS is ready (Phase 3 - Memory Management & Kernel Loading)\n");
+    early_print("MiniOS is ready (Phase 4 - Device Drivers & System Services)\n");
     
     // For now, just halt - later we'll start a shell
     early_print("Halting system (no shell yet)...\n");

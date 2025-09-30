@@ -5,7 +5,7 @@
 #include <stddef.h>
 
 // Kernel configuration
-#define KERNEL_VERSION "0.3.0"
+#define KERNEL_VERSION "0.4.0-dev"
 #define KERNEL_NAME "MiniOS"
 
 // Log levels
@@ -35,6 +35,11 @@
 #include "memory.h"
 #include "exceptions.h"
 #include "kernel_loader.h"
+
+// Phase 4 includes
+#include "device.h"
+#include "driver.h"
+#include "timer.h"
 
 // Function declarations
 void kernel_main(struct boot_info *boot_info);
