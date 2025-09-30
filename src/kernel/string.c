@@ -110,3 +110,29 @@ int memcmp(const void *s1, const void *s2, size_t n)
     }
     return 0;
 }
+
+char *strstr(const char *haystack, const char *needle)
+{
+    if (!haystack || !needle) return NULL;
+    
+    // Empty needle matches at beginning
+    if (*needle == '\0') return (char *)haystack;
+    
+    while (*haystack) {
+        const char *h = haystack;
+        const char *n = needle;
+        
+        // Compare characters
+        while (*h && *n && *h == *n) {
+            h++;
+            n++;
+        }
+        
+        // Found complete match
+        if (*n == '\0') return (char *)haystack;
+        
+        haystack++;
+    }
+    
+    return NULL;
+}

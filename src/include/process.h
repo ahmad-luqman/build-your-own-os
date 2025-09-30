@@ -105,6 +105,12 @@ void process_sleep(uint64_t ticks);
 void process_exit(int exit_code);
 int process_kill(uint32_t pid);
 
+// User program support (Phase 7)
+int process_fork(void);
+int process_exec(const char *path, int argc, char *argv[]);
+int process_wait(int pid, int *status);
+int process_spawn(const char *path, int argc, char *argv[]);
+
 // Scheduler functions
 void scheduler_init(void);
 void scheduler_tick(void);
