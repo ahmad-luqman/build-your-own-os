@@ -43,16 +43,18 @@ int arch_device_scan(void)
         }
     }
     
-    // TODO: Add UART device discovery (would parse device tree)
-    // struct device *uart_dev = device_create("uart0", DEVICE_TYPE_UART);
-    // if (uart_dev) {
-    //     uart_dev->base_addr = 0x09000000; // Example PL011 address
-    //     uart_dev->irq_num = 33;           // Example UART IRQ
-    //     if (device_register(uart_dev) == 0) {
-    //         device_count++;
-    //         early_print("ARM64: Found UART PL011\n");
-    //     }
-    // }
+    // Create UART device (ARM64 PL011)
+    struct device *uart_dev = device_create("uart0", DEVICE_TYPE_UART);
+    if (uart_dev) {
+        // Set ARM64-specific properties for PL011 UART
+        uart_dev->base_addr = 0x09000000; // Typical QEMU PL011 address
+        uart_dev->irq_num = 33;           // Typical UART IRQ
+        
+        if (device_register(uart_dev) == 0) {
+            device_count++;
+            early_print("ARM64: Found PL011 UART\n");
+        }
+    }
     
     // TODO: Add GIC discovery
     // struct device *gic_dev = device_create("gic", DEVICE_TYPE_INTERRUPT);

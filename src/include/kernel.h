@@ -40,14 +40,27 @@
 #include "device.h"
 #include "driver.h"
 #include "timer.h"
+#include "uart.h"
+#include "interrupt.h"
 
 // Function declarations
 void kernel_main(struct boot_info *boot_info);
 void kernel_panic(const char *message);
 void early_print(const char *str);
 
+// Utility functions
+char *itoa(int value, char *str, int base);
+
 // Phase 3 function declarations
 void test_memory_allocation(void);
+
+// Phase 4 function declarations (from uart.c)
+void uart_test_output(void);
+void uart_show_devices(void);
+
+// Phase 4 function declarations (from interrupt.c)
+void show_interrupt_stats(void);
+void show_interrupt_controllers(void);
 
 // Architecture-specific functions (implemented in arch/)
 void arch_init(void);

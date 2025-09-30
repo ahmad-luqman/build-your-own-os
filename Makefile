@@ -35,6 +35,8 @@ LDFLAGS = -nostdlib -static
 
 # Source files for kernel (exclude bootloader files)
 KERNEL_C_SOURCES = $(wildcard $(SRC_DIR)/kernel/*.c)
+KERNEL_C_SOURCES += $(wildcard $(SRC_DIR)/kernel/process/*.c)
+KERNEL_C_SOURCES += $(wildcard $(SRC_DIR)/kernel/syscall/*.c)
 KERNEL_C_SOURCES += $(filter-out %boot_main.c %uefi_boot.c, $(wildcard $(SRC_DIR)/arch/$(ARCH)/*.c))
 KERNEL_C_SOURCES += $(wildcard $(SRC_DIR)/arch/$(ARCH)/memory/*.c)
 KERNEL_C_SOURCES += $(wildcard $(SRC_DIR)/arch/$(ARCH)/interrupts/*.c)
@@ -48,8 +50,10 @@ KERNEL_C_SOURCES += $(wildcard $(SRC_DIR)/drivers/pci/*.c)
 # Assembly sources for kernel (exclude bootloader entry points)
 KERNEL_S_SOURCES = $(filter-out %boot.S, $(wildcard $(SRC_DIR)/arch/$(ARCH)/*.S))
 KERNEL_S_SOURCES += $(wildcard $(SRC_DIR)/arch/$(ARCH)/interrupts/*.S)
+KERNEL_S_SOURCES += $(wildcard $(SRC_DIR)/arch/$(ARCH)/process/*.S)
 KERNEL_ASM_SOURCES = $(filter-out %boot.asm, $(wildcard $(SRC_DIR)/arch/$(ARCH)/*.asm))
 KERNEL_ASM_SOURCES += $(wildcard $(SRC_DIR)/arch/$(ARCH)/interrupts/*.asm)
+KERNEL_ASM_SOURCES += $(wildcard $(SRC_DIR)/arch/$(ARCH)/process/*.asm)
 
 # Object files
 KERNEL_C_OBJECTS = $(KERNEL_C_SOURCES:$(SRC_DIR)/%.c=$(BUILD_DIR)/$(ARCH)/%.o)
