@@ -87,7 +87,15 @@ build_vm_command() {
             base_cmd="qemu-system-aarch64"
             base_cmd="$base_cmd -machine virt -cpu cortex-a72"
             base_cmd="$base_cmd -m 512M"
-            base_cmd="$base_cmd -drive file=$IMAGE_FILE,format=raw,if=virtio"
+            # Use direct kernel boot for QEMU (faster and more reliable)
+            if [ -f "$KERNEL_FILE" ]; then
+                base_cmd="$base_cmd -kernel $KERNEL_FILE"
+                base_cmd="$base_cmd -append 'console=uart,mmio,0x9000000'"
+                echo "Using direct kernel boot with: $KERNEL_FILE"
+            else
+                base_cmd="$base_cmd -drive file=$IMAGE_FILE,format=raw,if=virtio"
+                echo "Using disk image boot: $IMAGE_FILE"
+            fi
             base_cmd="$base_cmd $display_args"
             ;;
         x86_64)
@@ -162,18 +170,28 @@ analyze_results() {
     fi
     
     log "Analyzing test results..."
-    
+
     # Look for common success/failure patterns
     if grep -q "kernel panic\|Kernel panic" "$log_file"; then
         error "Kernel panic detected!"
     fi
-    
+
+    if grep -q "UNHANDLED EXCEPTION" "$log_file"; then
+        error "Unhandled exception detected!"
+        # Show the exception context
+        grep -A5 "UNHANDLED EXCEPTION" "$log_file"
+    fi
+
     if grep -q "MiniOS" "$log_file"; then
         success "MiniOS banner found in output"
     fi
-    
+
     if grep -q "Shell>" "$log_file"; then
         success "Shell prompt detected"
+    fi
+
+    if grep -q "SUCCESS: Phases 1-2" "$log_file"; then
+        success "Phase 1-2 testing successful!"
     fi
     
     # Show last few lines of output
