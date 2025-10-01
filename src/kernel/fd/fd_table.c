@@ -10,6 +10,7 @@
 
 // Global FD system state
 static int fd_initialized = 0;
+static struct fd_table static_fd_table;  // Use static allocation to avoid dynamic memory issues
 static struct fd_table *current_fd_table = NULL;
 
 int fd_init(void)
@@ -18,17 +19,21 @@ int fd_init(void)
         return VFS_SUCCESS;
     }
     
-    early_print("Initializing file descriptor system...\n");
+    // Use static FD table for kernel/init process to avoid memory allocation issues
+    current_fd_table = &static_fd_table;
     
-    // Create initial FD table (for kernel/init process)
-    current_fd_table = fd_table_create();
-    if (!current_fd_table) {
-        early_print("Failed to create initial FD table\n");
-        return VFS_ENOMEM;
+    // Initialize all file descriptors as unused
+    for (int i = 0; i < MAX_OPEN_FILES; i++) {
+        current_fd_table->fds[i].flags = 0;  // Not FD_FLAG_USED
+        current_fd_table->fds[i].file = NULL;
+        current_fd_table->fds[i].open_flags = 0;
+        current_fd_table->fds[i].mode = 0;
     }
     
+    current_fd_table->next_fd = 0;
+    current_fd_table->ref_count = 1;
+    
     fd_initialized = 1;
-    early_print("File descriptor system initialized\n");
     
     return VFS_SUCCESS;
 }
