@@ -10,43 +10,55 @@
 
 // Global FD system state
 static int fd_initialized = 0;
-static struct fd_table static_fd_table __attribute__((section(".data")));  // Force into .data section
+// Don't use static fd_table - causes BSS alignment/size issues
+// static struct fd_table static_fd_table __attribute__((section(".data")));
 static struct fd_table *current_fd_table = NULL;
 
 int fd_init(void)
 {
-    early_print("FD init: Entry\n");
+    early_print("FD init: Starting initialization\n");
     
     if (fd_initialized) {
         early_print("FD init: Already initialized\n");
         return VFS_SUCCESS;
     }
     
-    early_print("FD init: Setting up static table pointer\n");
+    // Allocate FD table using simple heap allocator (kmalloc)
+    early_print("FD init: Allocating FD table with kmalloc...\n");
+    current_fd_table = (struct fd_table *)kmalloc(sizeof(struct fd_table));
+    if (!current_fd_table) {
+        early_print("FD init: Failed to allocate FD table\n");
+        return VFS_ENOMEM;
+    }
     
-    // Use static FD table for kernel/init process to avoid memory allocation issues
-    current_fd_table = &static_fd_table;
+    early_print("FD init: FD table allocated at address: ");
+    // Print address (simplified)
+    early_print(current_fd_table ? "valid\n" : "NULL\n");
     
-    early_print("FD init: About to initialize FD entries\n");
+    early_print("FD init: About to initialize first FD...\n");
+    current_fd_table->fds[0].flags = 0;
+    early_print("FD init: First FD flags set\n");
     
-    // Initialize all file descriptors as unused - do it carefully
-    int i;
-    for (i = 0; i < MAX_OPEN_FILES; i++) {
-        if (i % 8 == 0) {
-            early_print(".");  // Progress indicator every 8 entries
-        }
-        current_fd_table->fds[i].flags = 0;  // Not FD_FLAG_USED
+    current_fd_table->fds[0].file = NULL;
+    early_print("FD init: First FD file pointer set\n");
+    
+    current_fd_table->fds[0].open_flags = 0;
+    early_print("FD init: First FD open_flags set\n");
+    
+    current_fd_table->fds[0].mode = 0;
+    early_print("FD init: First FD mode set\n");
+    
+    early_print("FD init: Initializing remaining fields...\n");
+    for (int i = 1; i < MAX_OPEN_FILES; i++) {
+        current_fd_table->fds[i].flags = 0;
         current_fd_table->fds[i].file = NULL;
         current_fd_table->fds[i].open_flags = 0;
         current_fd_table->fds[i].mode = 0;
     }
     
-    early_print("\nFD init: Setting initial values\n");
-    
     current_fd_table->next_fd = 0;
     current_fd_table->ref_count = 1;
     
-    early_print("FD init: About to set fd_initialized\n");
     fd_initialized = 1;
     
     early_print("FD init: Completed successfully\n");

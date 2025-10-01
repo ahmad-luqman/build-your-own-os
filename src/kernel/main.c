@@ -281,6 +281,25 @@ void kernel_main(struct boot_info *boot_info)
 #if !defined(PHASE_4_ONLY)
     // Phase 5: File system initialization
     early_print("Phase 5: Initializing file system...\n");
+    
+    // Verify memory allocator is ready before Phase 5
+    early_print("Verifying memory allocator readiness...\n");
+    if (!memory_allocator_is_ready()) {
+        early_print("ERROR: Memory allocator not ready for Phase 5!\n");
+        kernel_panic("Memory allocator initialization incomplete");
+    }
+    early_print("Memory allocator is ready\n");
+    
+    // Test memory allocation before proceeding
+    early_print("Testing memory allocator...\n");
+    void *test = memory_alloc(1024, MEMORY_ALIGN_4K);
+    if (test) {
+        early_print("✓ Allocator test PASSED\n");
+        memory_free(test);
+    } else {
+        early_print("✗ Allocator test FAILED\n");
+        kernel_panic("Memory allocator not functional");
+    }
 
     // Initialize block device layer
     if (block_device_init() != BLOCK_SUCCESS) {
@@ -302,10 +321,26 @@ void kernel_main(struct boot_info *boot_info)
         early_print("Warning: RAMFS initialization failed\n");
     }
 
-    // File descriptor system temporarily disabled due to memory allocation issues
-    early_print("File descriptor system: DISABLED (awaiting memory allocator fix)\n");
+    // TODO: File descriptor system causes memory exception - needs investigation
+    // The exception occurs when trying to initialize FD array in loop
+    // Likely due to kmalloc returning invalid/misaligned pointer for large structures
+    early_print("File descriptor system: DISABLED (memory allocator issue with large structs)\n");
+    // if (fd_init() == VFS_SUCCESS) {
+    //     early_print("File descriptor system initialized\n");
+    // } else {
+    //     early_print("Warning: File descriptor initialization failed\n");
+    // }
 
-    // Mount RAMFS filesystem (doesn't require block device or dynamic allocation)
+    // TODO: RAM disk creation also causes memory exception
+    early_print("RAM disk: DISABLED (memory allocator issue)\n");
+    // struct block_device *ramdisk = ramdisk_create("ramdisk0", 4 * 1024 * 1024);
+    // if (ramdisk) {
+    //     early_print("RAM disk created successfully\n");
+    // } else {
+    //     early_print("Warning: RAM disk creation failed\n");
+    // }
+
+    // Mount RAMFS filesystem (works without FD system and RAM disk)
     early_print("Mounting RAMFS at root...\n");
     if (vfs_mount("none", "/", "ramfs", 0) == VFS_SUCCESS) {
         early_print("RAMFS mounted successfully\n");
@@ -314,9 +349,15 @@ void kernel_main(struct boot_info *boot_info)
         struct file_system *root_fs = vfs_get_filesystem("/");
         if (root_fs) {
             early_print("Root filesystem ready\n");
-            // Note: Cannot populate files yet - requires working kmalloc
-            // ramfs_populate_initial_files(root_fs);
-            // ramfs_dump_filesystem_info(root_fs);
+            
+            // Try to populate initial files (may work with static allocations in RAMFS)
+            early_print("Attempting to populate initial files...\n");
+            if (ramfs_populate_initial_files(root_fs) == VFS_SUCCESS) {
+                early_print("Initial file structure created\n");
+                ramfs_dump_filesystem_info(root_fs);
+            } else {
+                early_print("Warning: Could not populate initial files (expected with current allocator)\n");
+            }
         }
     } else {
         early_print("Warning: Failed to mount RAMFS\n");
@@ -325,8 +366,9 @@ void kernel_main(struct boot_info *boot_info)
     // Display VFS information
     vfs_dump_info();
 
-    early_print("File system layer initialized (basic mode)\n");
-    early_print("Note: Full FS operations require memory allocator fix\n");
+    early_print("File system layer initialized\n");
+    early_print("NOTE: FD system and RAM disk disabled due to memory allocator limitations\n");
+    early_print("      with large structure allocations. This is a known issue for future fix.\n");
 
 #if !defined(PHASE_5_ONLY)
     // Phase 6: Initialize shell system

@@ -57,6 +57,18 @@ int memory_init(struct boot_info *boot_info)
     // Show memory layout for debugging
     memory_show_layout(boot_info);
     
+    // Verify allocator is working with a test allocation
+    early_print("memory_init: Testing allocator...\n");
+    void *test = memory_alloc(PAGE_SIZE_4K, MEMORY_ALIGN_4K);
+    if (test) {
+        early_print("memory_init: Allocator test PASSED\n");
+        memory_free(test);
+    } else {
+        early_print("memory_init: Allocator test FAILED\n");
+        memory_initialized = 0;
+        return -1;
+    }
+    
     return 0;
 }
 
@@ -174,4 +186,11 @@ void kfree(void *ptr) {
     // Simple allocator doesn't support freeing individual blocks
     // In a real implementation, this would maintain a free list
     (void)ptr;  // Suppress warning
+}
+
+/**
+ * Check if memory allocator is ready
+ */
+int memory_allocator_is_ready(void) {
+    return memory_initialized;
 }
