@@ -135,12 +135,16 @@ void memory_show_layout(struct boot_info *boot_info)
     early_print("  Region 0: 0x40000000 - 128MB (Available)\n");
     
     // Show memory statistics
+    early_print("About to call memory_get_stats...\n");
     struct memory_stats stats;
     memory_get_stats(&stats);
+    early_print("memory_get_stats completed\n");
     
     early_print("Total memory: 16MB\n");    // Based on our allocator config
     early_print("Free memory: 16MB\n");
     early_print("===================\n\n");
+    
+    early_print("memory_show_layout completed, returning to main\n");
 }
 
 // Simple memory allocation for shell (basic implementation)

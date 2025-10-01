@@ -36,9 +36,11 @@ void arch_memory_allocator_init(struct memory_map_entry *memory_map,
 {
     early_print("allocator: start\n");
     
-    // Initialize bitmap to all used
+    // Initialize bitmap to all used (avoid SIMD instructions)
+    // Use volatile to prevent compiler optimization into NEON instructions
+    volatile uint8_t *bitmap = page_bitmap;
     for (int i = 0; i < BITMAP_SIZE; i++) {
-        page_bitmap[i] = 0xFF;
+        bitmap[i] = 0xFF;
     }
     early_print("allocator: bitmap done\n");
     

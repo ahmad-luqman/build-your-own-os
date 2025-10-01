@@ -307,10 +307,29 @@ void test_memory_allocation(void)
     
     // Test memory writing (verify allocation works)
     if (page1) {
-        early_print("Testing memory write...\n");
-        *(uint64_t *)page1 = 0xDEADBEEFCAFEBABEULL;
-        uint64_t read_val = *(uint64_t *)page1;
-        if (read_val == 0xDEADBEEFCAFEBABEULL) {
+        early_print("Testing memory write to address: 0x");
+        uint64_t addr = (uint64_t)page1;
+        for (int i = 15; i >= 0; i--) {
+            int digit = (addr >> (i * 4)) & 0xF;
+            print_hex_digit(digit);
+        }
+        early_print("\n");
+        
+        early_print("Attempting write...\n");
+        // Try a simple write first
+        volatile uint32_t *test_ptr = (volatile uint32_t *)page1;
+        *test_ptr = 0x12345678;
+        early_print("Write completed\n");
+        
+        uint32_t read_val = *test_ptr;
+        early_print("Read completed: 0x");
+        for (int i = 7; i >= 0; i--) {
+            int digit = (read_val >> (i * 4)) & 0xF;
+            print_hex_digit(digit);
+        }
+        early_print("\n");
+        
+        if (read_val == 0x12345678) {
             early_print("Memory write/read test: PASS\n");
         } else {
             early_print("Memory write/read test: FAIL\n");

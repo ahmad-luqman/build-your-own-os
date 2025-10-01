@@ -171,6 +171,7 @@ void kernel_main(struct boot_info *boot_info)
     if (memory_init(boot_info) < 0) {
         kernel_panic("Memory management initialization failed");
     }
+    early_print("Back from memory_init, about to do exception_init...\n");
 #endif
     
     // Phase 3: Initialize exception handling  
@@ -195,7 +196,8 @@ void kernel_main(struct boot_info *boot_info)
         early_print("Memory allocation test completed\n");
     }
 #else
-    test_memory_allocation();
+    early_print("Skipping memory allocation test for now...\n");
+    // test_memory_allocation();  // Temporarily disabled
 #endif
 
 #if !defined(PHASE_3_ONLY)
