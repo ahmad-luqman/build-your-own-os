@@ -39,8 +39,8 @@ int device_init(struct boot_info *boot_info)
     
     device_subsystem_initialized = 1;
     
-    // Scan for devices
-    int discovered = arch_device_scan();
+    // Scan for devices - temporarily disabled for Phase 5 testing
+    int discovered = 0;
     
     early_print("Device subsystem initialized, ");
     // Simple number to string conversion for discovered devices

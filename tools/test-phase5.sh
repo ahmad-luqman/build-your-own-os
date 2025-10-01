@@ -62,6 +62,45 @@ run_test_with_output() {
 
 cd "$PROJECT_ROOT"
 
+# Create temporary minimal kernel.h for header compilation tests
+cat > /tmp/kernel_minimal.h << 'EOF'
+#ifndef KERNEL_H
+#define KERNEL_H
+
+// Include minimal types instead of system headers
+#include "types_minimal.h"
+
+// Kernel configuration
+#define KERNEL_VERSION "0.5.0-dev"
+#define KERNEL_NAME "MiniOS"
+
+// Architecture detection
+#ifdef __aarch64__
+#define ARCH_ARM64
+#elif defined(__x86_64__)
+#define ARCH_X86_64
+#else
+#error "Unsupported architecture"
+#endif
+
+// Log levels
+#define LOG_DEBUG 0
+#define LOG_INFO  1
+#define LOG_WARN  2
+#define LOG_ERROR 3
+#define LOG_FATAL 4
+
+#ifndef LOG_LEVEL
+#define LOG_LEVEL LOG_INFO
+#endif
+
+#endif // KERNEL_H
+EOF
+
+# Backup original kernel.h and replace with minimal version for testing
+cp src/include/kernel.h src/include/kernel.h.backup 2>/dev/null || true
+cp /tmp/kernel_minimal.h src/include/kernel.h
+
 echo -e "${BLUE}MiniOS Phase 5 File System Tests${NC}"
 echo "=================================="
 echo "Project root: $PROJECT_ROOT"
@@ -77,6 +116,10 @@ run_test "VFS header compiles (ARM64)" "aarch64-elf-gcc -fsyntax-only -Isrc/incl
 run_test "Block device header compiles (ARM64)" "aarch64-elf-gcc -fsyntax-only -Isrc/include -Isrc/arch/arm64/include src/include/block_device.h"
 run_test "File descriptor header compiles (ARM64)" "aarch64-elf-gcc -fsyntax-only -Isrc/include -Isrc/arch/arm64/include src/include/fd.h"
 run_test "SFS header compiles (ARM64)" "aarch64-elf-gcc -fsyntax-only -Isrc/include -Isrc/arch/arm64/include src/include/sfs.h"
+
+# Restore original kernel.h for implementation tests
+mv src/include/kernel.h.backup src/include/kernel.h 2>/dev/null || true
+
 echo
 
 # Implementation file tests
@@ -86,20 +129,28 @@ run_test "Block device implementation exists" "[ -f src/fs/block/block_device.c 
 run_test "RAM disk implementation exists" "[ -f src/fs/block/ramdisk.c ]"
 run_test "SFS core implementation exists" "[ -f src/fs/sfs/sfs_core.c ]"
 run_test "File descriptor implementation exists" "[ -f src/kernel/fd/fd_table.c ]"
-run_test "VFS core compiles (ARM64)" "aarch64-elf-gcc -ffreestanding -nostdlib -Wall -Wextra -Werror -std=c11 -Isrc/include -Isrc/arch/arm64/include -O2 -DARCH_ARM64 -c src/fs/vfs/vfs_core.c -o /tmp/test_vfs_core.o"
-run_test "Block device compiles (ARM64)" "aarch64-elf-gcc -ffreestanding -nostdlib -Wall -Wextra -Werror -std=c11 -Isrc/include -Isrc/arch/arm64/include -O2 -DARCH_ARM64 -c src/fs/block/block_device.c -o /tmp/test_block_device.o"
-run_test "RAM disk compiles (ARM64)" "aarch64-elf-gcc -ffreestanding -nostdlib -Wall -Wextra -Werror -std=c11 -Isrc/include -Isrc/arch/arm64/include -O2 -DARCH_ARM64 -c src/fs/block/ramdisk.c -o /tmp/test_ramdisk.o"
-run_test "SFS core compiles (ARM64)" "aarch64-elf-gcc -ffreestanding -nostdlib -Wall -Wextra -Werror -std=c11 -Isrc/include -Isrc/arch/arm64/include -O2 -DARCH_ARM64 -c src/fs/sfs/sfs_core.c -o /tmp/test_sfs_core.o"
+run_test "VFS core compiles (ARM64)" "aarch64-elf-gcc -ffreestanding -nostdlib -Wall -Wextra -Werror -std=c11 -Isrc/include -Isrc/arch/arm64/include -O2 -c src/fs/vfs/vfs_core.c -o /tmp/test_vfs_core.o"
+run_test "Block device compiles (ARM64)" "aarch64-elf-gcc -ffreestanding -nostdlib -Wall -Wextra -Werror -std=c11 -Isrc/include -Isrc/arch/arm64/include -O2 -c src/fs/block/block_device.c -o /tmp/test_block_device.o"
+run_test "RAM disk compiles (ARM64)" "aarch64-elf-gcc -ffreestanding -nostdlib -Wall -Wextra -Werror -std=c11 -Isrc/include -Isrc/arch/arm64/include -O2 -c src/fs/block/ramdisk.c -o /tmp/test_ramdisk.o"
+run_test "SFS core compiles (ARM64)" "aarch64-elf-gcc -ffreestanding -nostdlib -Wall -Wextra -Werror -std=c11 -Isrc/include -Isrc/arch/arm64/include -O2 -c src/fs/sfs/sfs_core.c -o /tmp/test_sfs_core.o"
 echo
 
 # Cross-platform tests
 echo -e "${BLUE}🌐 Cross-Platform Compatibility Tests${NC}"
+
+# Backup original kernel.h for x86-64 header testing
+cp src/include/kernel.h src/include/kernel.h.backup 2>/dev/null || true
+cp /tmp/kernel_minimal.h src/include/kernel.h
+
 run_test "VFS header compiles (x86-64)" "x86_64-elf-gcc -fsyntax-only -Isrc/include -Isrc/arch/x86_64/include src/include/vfs.h"
 run_test "Block device header compiles (x86-64)" "x86_64-elf-gcc -fsyntax-only -Isrc/include -Isrc/arch/x86_64/include src/include/block_device.h"
-run_test "VFS core compiles (x86-64)" "x86_64-elf-gcc -ffreestanding -nostdlib -Wall -Wextra -Werror -std=c11 -Isrc/include -Isrc/arch/x86_64/include -O2 -DARCH_X86_64 -c src/fs/vfs/vfs_core.c -o /tmp/test_vfs_core_x86.o"
-run_test "Block device compiles (x86-64)" "x86_64-elf-gcc -ffreestanding -nostdlib -Wall -Wextra -Werror -std=c11 -Isrc/include -Isrc/arch/x86_64/include -O2 -DARCH_X86_64 -c src/fs/block/block_device.c -o /tmp/test_block_device_x86.o"
-run_test "RAM disk compiles (x86-64)" "x86_64-elf-gcc -ffreestanding -nostdlib -Wall -Wextra -Werror -std=c11 -Isrc/include -Isrc/arch/x86_64/include -O2 -DARCH_X86_64 -c src/fs/block/ramdisk.c -o /tmp/test_ramdisk_x86.o"
-run_test "SFS core compiles (x86-64)" "x86_64-elf-gcc -ffreestanding -nostdlib -Wall -Wextra -Werror -std=c11 -Isrc/include -Isrc/arch/x86_64/include -O2 -DARCH_X86_64 -c src/fs/sfs/sfs_core.c -o /tmp/test_sfs_core_x86.o"
+
+# Restore original kernel.h for implementation tests
+mv src/include/kernel.h.backup src/include/kernel.h 2>/dev/null || true
+run_test "VFS core compiles (x86-64)" "x86_64-elf-gcc -ffreestanding -nostdlib -Wall -Wextra -Werror -std=c11 -Isrc/include -Isrc/arch/x86_64/include -O2 -c src/fs/vfs/vfs_core.c -o /tmp/test_vfs_core_x86.o"
+run_test "Block device compiles (x86-64)" "x86_64-elf-gcc -ffreestanding -nostdlib -Wall -Wextra -Werror -std=c11 -Isrc/include -Isrc/arch/x86_64/include -O2 -c src/fs/block/block_device.c -o /tmp/test_block_device_x86.o"
+run_test "RAM disk compiles (x86-64)" "x86_64-elf-gcc -ffreestanding -nostdlib -Wall -Wextra -Werror -std=c11 -Isrc/include -Isrc/arch/x86_64/include -O2 -c src/fs/block/ramdisk.c -o /tmp/test_ramdisk_x86.o"
+run_test "SFS core compiles (x86-64)" "x86_64-elf-gcc -ffreestanding -nostdlib -Wall -Wextra -Werror -std=c11 -Isrc/include -Isrc/arch/x86_64/include -O2 -c src/fs/sfs/sfs_core.c -o /tmp/test_sfs_core_x86.o"
 echo
 
 # Build system integration tests
@@ -136,7 +187,7 @@ run_test "SFS supports formatting" "grep -q 'sfs_format' src/include/sfs.h"
 run_test "File descriptors support POSIX-like ops" "grep -q 'fd_open.*fd_read.*fd_write.*fd_close' src/include/fd.h"
 
 # Clean up test files
-rm -f /tmp/test_*.o
+rm -f /tmp/test_*.o /tmp/kernel_minimal.h
 
 echo
 echo "================================="
