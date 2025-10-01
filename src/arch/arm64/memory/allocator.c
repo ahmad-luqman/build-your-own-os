@@ -173,9 +173,14 @@ void memory_free_pages(void *ptr, size_t num_pages)
  */
 void memory_get_stats(struct memory_stats *stats)
 {
-    if (stats) {
-        *stats = current_stats;
-    }
+    if (!stats) return;
+    
+    // Manual field assignment instead of struct copy to avoid SIMD issues
+    stats->total_memory = total_pages * PAGE_SIZE_4K;
+    stats->free_memory = free_pages * PAGE_SIZE_4K;
+    stats->used_memory = (total_pages - free_pages) * PAGE_SIZE_4K;
+    stats->total_regions = 1;
+    stats->free_regions = free_pages;
 }
 
 // Helper functions

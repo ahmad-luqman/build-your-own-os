@@ -69,12 +69,21 @@ int device_init(struct boot_info *boot_info)
 struct device *device_create(const char *name, uint32_t type)
 {
     if (!device_subsystem_initialized) {
+        early_print("Device subsystem not initialized\n");
         return NULL;
     }
     
     // Allocate memory for device structure
     struct device *dev = memory_alloc(sizeof(struct device), MEMORY_ALIGN_4K);
     if (!dev) {
+        early_print("Failed to allocate memory for device\n");
+        return NULL;
+    }
+    
+    // Check if the allocated memory is in a valid range
+    uint64_t dev_addr = (uint64_t)dev;
+    if (dev_addr < 0x40000000 || dev_addr > 0x48000000) {
+        early_print("WARNING: Device allocated at invalid address\n");
         return NULL;
     }
     

@@ -44,17 +44,10 @@ int timer_init(void)
     // Find and initialize timer device
     struct device *timer_dev = device_find_by_type(DEVICE_TYPE_TIMER);
     if (!timer_dev) {
-        // Create a timer device (will be picked up by device discovery)
-        timer_dev = device_create("timer0", DEVICE_TYPE_TIMER);
-        if (!timer_dev) {
-            early_print("Failed to create timer device\n");
-            return -1;
-        }
-        
-        if (device_register(timer_dev) < 0) {
-            early_print("Failed to register timer device\n");
-            return -1;
-        }
+        // Skip timer device creation for debugging
+        early_print("No timer device found, skipping timer device initialization\n");
+        timer_subsystem_initialized = 1;
+        return 0;
     }
     
     // Initialize the timer device

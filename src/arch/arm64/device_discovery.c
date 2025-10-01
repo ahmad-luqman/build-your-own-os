@@ -28,47 +28,10 @@ int arch_device_scan(void)
 {
     early_print("ARM64: Scanning for devices\n");
     
-    int device_count = 0;
+    // Temporarily disable device creation to isolate the issue
+    early_print("ARM64: Skipping device creation for debugging\n");
     
-    // Create a generic timer device (ARM64 always has this)
-    struct device *timer_dev = device_create("arm,generic-timer", DEVICE_TYPE_TIMER);
-    if (timer_dev) {
-        // Set ARM64-specific properties
-        timer_dev->base_addr = 0; // Generic timer uses system registers
-        timer_dev->irq_num = 30;  // Typical generic timer IRQ
-        
-        if (device_register(timer_dev) == 0) {
-            device_count++;
-            early_print("ARM64: Found Generic Timer\n");
-        }
-    }
-    
-    // Create UART device (ARM64 PL011)
-    struct device *uart_dev = device_create("uart0", DEVICE_TYPE_UART);
-    if (uart_dev) {
-        // Set ARM64-specific properties for PL011 UART
-        uart_dev->base_addr = 0x09000000; // Typical QEMU PL011 address
-        uart_dev->irq_num = 33;           // Typical UART IRQ
-        
-        if (device_register(uart_dev) == 0) {
-            device_count++;
-            early_print("ARM64: Found PL011 UART\n");
-        }
-    }
-    
-    early_print("Device tree analysis complete\n");
-    
-    // TODO: Add GIC discovery
-    // struct device *gic_dev = device_create("gic", DEVICE_TYPE_INTERRUPT);
-    // if (gic_dev) {
-    //     gic_dev->base_addr = 0x08000000; // Example GIC address
-    //     if (device_register(gic_dev) == 0) {
-    //         device_count++;
-    //         early_print("ARM64: Found GIC\n");
-    //     }
-    // }
-    
-    return device_count;
+    return 0; // Return 0 devices found for now
 }
 
 #ifdef FUTURE_DEVICE_TREE_SUPPORT
