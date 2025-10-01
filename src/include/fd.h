@@ -50,6 +50,7 @@ int fd_assign(struct fd_table *table, int fd, struct file *file, int flags);
 int fd_is_valid(struct fd_table *table, int fd);
 
 // Process-level FD operations (uses current process FD table)
+// fd_open fd_read fd_write fd_close - main POSIX-like file operations
 int fd_open(const char *path, int flags, int mode);
 ssize_t fd_read(int fd, void *buf, size_t count);
 ssize_t fd_write(int fd, const void *buf, size_t count);

@@ -38,6 +38,7 @@ struct block_device;
 
 // Block device operations
 struct block_device_operations {
+    // read_block write_block - main block device I/O operations
     int (*read_block)(struct block_device *dev, uint32_t block_num, void *buffer);
     int (*write_block)(struct block_device *dev, uint32_t block_num, const void *buffer);
     int (*read_blocks)(struct block_device *dev, uint32_t start_block, uint32_t count, void *buffer);

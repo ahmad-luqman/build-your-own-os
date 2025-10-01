@@ -35,7 +35,7 @@ int fd_init(void)
 
 struct fd_table *fd_table_create(void)
 {
-    struct fd_table *table = kmalloc(sizeof(struct fd_table));
+    struct fd_table *table = memory_alloc(sizeof(struct fd_table), MEMORY_ALIGN_4K);
     if (!table) {
         return NULL;
     }
@@ -67,7 +67,7 @@ void fd_table_destroy(struct fd_table *table)
         }
     }
     
-    kfree(table);
+    memory_free(table);
 }
 
 struct fd_table *fd_table_clone(struct fd_table *src)
@@ -141,7 +141,7 @@ void fd_free(struct fd_table *table, int fd)
             // Close file if no more references
             if (file->ref_count == 0 && file->ops && file->ops->close) {
                 file->ops->close(file);
-                kfree(file);
+                memory_free(file);
             }
         }
         
@@ -229,7 +229,7 @@ int fd_open(const char *path, int flags, int mode)
     
     // For now, just create a dummy file structure
     // In a full implementation, VFS would return a file structure
-    struct file *file = kmalloc(sizeof(struct file));
+    struct file *file = memory_alloc(sizeof(struct file), MEMORY_ALIGN_4K);
     if (!file) {
         vfs_close(vfs_fd);
         fd_free(table, fd);
@@ -247,7 +247,7 @@ int fd_open(const char *path, int flags, int mode)
     
     // Assign file to FD
     if (fd_assign(table, fd, file, flags) != VFS_SUCCESS) {
-        kfree(file);
+        memory_free(file);
         vfs_close(vfs_fd);
         fd_free(table, fd);
         return -1;
