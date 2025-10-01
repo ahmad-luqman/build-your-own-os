@@ -31,7 +31,7 @@ int arch_device_scan(void)
     int device_count = 0;
     
     // Create a generic timer device (ARM64 always has this)
-    struct device *timer_dev = device_create("generic-timer", DEVICE_TYPE_TIMER);
+    struct device *timer_dev = device_create("arm,generic-timer", DEVICE_TYPE_TIMER);
     if (timer_dev) {
         // Set ARM64-specific properties
         timer_dev->base_addr = 0; // Generic timer uses system registers
@@ -55,6 +55,8 @@ int arch_device_scan(void)
             early_print("ARM64: Found PL011 UART\n");
         }
     }
+    
+    early_print("Device tree analysis complete\n");
     
     // TODO: Add GIC discovery
     // struct device *gic_dev = device_create("gic", DEVICE_TYPE_INTERRUPT);

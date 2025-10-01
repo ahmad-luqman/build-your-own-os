@@ -34,10 +34,13 @@ static uint32_t find_free_pages(uint32_t count);
 void arch_memory_allocator_init(struct memory_map_entry *memory_map,
                                 uint32_t map_entries)
 {
+    early_print("allocator: start\n");
+    
     // Initialize bitmap to all used
     for (int i = 0; i < BITMAP_SIZE; i++) {
         page_bitmap[i] = 0xFF;
     }
+    early_print("allocator: bitmap done\n");
     
     total_pages = 0;
     free_pages = 0;
@@ -54,6 +57,7 @@ void arch_memory_allocator_init(struct memory_map_entry *memory_map,
             }
         }
     }
+    early_print("allocator: region found\n");
     
     if (largest_size == 0) {
         return;  // No available memory found
@@ -79,11 +83,13 @@ void arch_memory_allocator_init(struct memory_map_entry *memory_map,
     if (total_pages > MAX_PAGES) {
         total_pages = MAX_PAGES;
     }
+    early_print("allocator: pages calculated\n");
     
     // Mark all pages as free initially
     for (uint32_t i = 0; i < total_pages; i++) {
         set_page_free(i);
     }
+    early_print("allocator: pages freed\n");
     
     free_pages = total_pages;
     
@@ -93,6 +99,8 @@ void arch_memory_allocator_init(struct memory_map_entry *memory_map,
     current_stats.used_memory = 0;
     current_stats.total_regions = map_entries;
     current_stats.free_regions = total_pages;
+    
+    early_print("allocator: complete\n");
 }
 
 /**
