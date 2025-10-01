@@ -10,31 +10,46 @@
 
 // Global FD system state
 static int fd_initialized = 0;
-static struct fd_table static_fd_table;  // Use static allocation to avoid dynamic memory issues
+static struct fd_table static_fd_table __attribute__((section(".data")));  // Force into .data section
 static struct fd_table *current_fd_table = NULL;
 
 int fd_init(void)
 {
+    early_print("FD init: Entry\n");
+    
     if (fd_initialized) {
+        early_print("FD init: Already initialized\n");
         return VFS_SUCCESS;
     }
+    
+    early_print("FD init: Setting up static table pointer\n");
     
     // Use static FD table for kernel/init process to avoid memory allocation issues
     current_fd_table = &static_fd_table;
     
-    // Initialize all file descriptors as unused
-    for (int i = 0; i < MAX_OPEN_FILES; i++) {
+    early_print("FD init: About to initialize FD entries\n");
+    
+    // Initialize all file descriptors as unused - do it carefully
+    int i;
+    for (i = 0; i < MAX_OPEN_FILES; i++) {
+        if (i % 8 == 0) {
+            early_print(".");  // Progress indicator every 8 entries
+        }
         current_fd_table->fds[i].flags = 0;  // Not FD_FLAG_USED
         current_fd_table->fds[i].file = NULL;
         current_fd_table->fds[i].open_flags = 0;
         current_fd_table->fds[i].mode = 0;
     }
     
+    early_print("\nFD init: Setting initial values\n");
+    
     current_fd_table->next_fd = 0;
     current_fd_table->ref_count = 1;
     
+    early_print("FD init: About to set fd_initialized\n");
     fd_initialized = 1;
     
+    early_print("FD init: Completed successfully\n");
     return VFS_SUCCESS;
 }
 
@@ -146,7 +161,7 @@ void fd_free(struct fd_table *table, int fd)
             // Close file if no more references
             if (file->ref_count == 0 && file->ops && file->ops->close) {
                 file->ops->close(file);
-                memory_free(file);
+                kfree(file);
             }
         }
         
@@ -232,31 +247,10 @@ int fd_open(const char *path, int flags, int mode)
         return -1;  // VFS open failed
     }
     
-    // For now, just create a dummy file structure
-    // In a full implementation, VFS would return a file structure
-    struct file *file = memory_alloc(sizeof(struct file), MEMORY_ALIGN_4K);
-    if (!file) {
-        vfs_close(vfs_fd);
-        fd_free(table, fd);
-        return -1;
-    }
-    
-    // Initialize file structure
-    file->inode = NULL;  // Would be set by VFS
-    file->fs = NULL;     // Would be set by VFS
-    file->position = 0;
-    file->flags = flags;
-    file->mode = mode;
-    file->ref_count = 0; // Will be incremented by fd_assign
-    file->ops = NULL;    // Would be set by filesystem
-    
-    // Assign file to FD
-    if (fd_assign(table, fd, file, flags) != VFS_SUCCESS) {
-        memory_free(file);
-        vfs_close(vfs_fd);
-        fd_free(table, fd);
-        return -1;
-    }
+    // For now, just mark FD as allocated without creating file structure
+    // Full implementation would create proper file structure
+    table->fds[fd].open_flags = flags;
+    table->fds[fd].mode = mode;
     
     return fd;
 }

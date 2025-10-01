@@ -18,6 +18,7 @@
 #include "syscall.h"
 #include "vfs.h"
 #include "sfs.h"
+#include "ramfs.h"
 #include "block_device.h"
 #include "fd.h"
 #include "shell.h"
@@ -296,12 +297,36 @@ void kernel_main(struct boot_info *boot_info)
         early_print("Warning: SFS initialization failed\n");
     }
 
-    // Initialize file descriptor system
-    // Note: FD system currently causes exception, disabled for now
-    // This means VFS operations will use stub FD handling
-    early_print("File descriptor system skipped (Phase 5 incomplete)\n");
+    // Initialize RAM File System
+    if (ramfs_init() != VFS_SUCCESS) {
+        early_print("Warning: RAMFS initialization failed\n");
+    }
 
-    early_print("File system layer initialized\n");
+    // File descriptor system temporarily disabled due to memory allocation issues
+    early_print("File descriptor system: DISABLED (awaiting memory allocator fix)\n");
+
+    // Mount RAMFS filesystem (doesn't require block device or dynamic allocation)
+    early_print("Mounting RAMFS at root...\n");
+    if (vfs_mount("none", "/", "ramfs", 0) == VFS_SUCCESS) {
+        early_print("RAMFS mounted successfully\n");
+        
+        // Get the mounted filesystem
+        struct file_system *root_fs = vfs_get_filesystem("/");
+        if (root_fs) {
+            early_print("Root filesystem ready\n");
+            // Note: Cannot populate files yet - requires working kmalloc
+            // ramfs_populate_initial_files(root_fs);
+            // ramfs_dump_filesystem_info(root_fs);
+        }
+    } else {
+        early_print("Warning: Failed to mount RAMFS\n");
+    }
+
+    // Display VFS information
+    vfs_dump_info();
+
+    early_print("File system layer initialized (basic mode)\n");
+    early_print("Note: Full FS operations require memory allocator fix\n");
 
 #if !defined(PHASE_5_ONLY)
     // Phase 6: Initialize shell system
