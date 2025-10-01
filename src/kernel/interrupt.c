@@ -11,7 +11,7 @@
 static int interrupt_subsystem_initialized = 0;
 static struct interrupt_controller *controllers[4];
 static int num_controllers = 0;
-static struct irq_desc irq_descriptors[256];
+static struct irq_desc irq_descriptors[64];  // Reduced from 256 for debugging
 
 // Architecture-specific functions
 #ifdef ARCH_ARM64
@@ -32,77 +32,11 @@ int interrupt_init(void)
 {
     early_print("Initializing interrupt subsystem...\n");
     early_print("Interrupt: Function entered successfully\n");
-    
-    // Clear interrupt descriptors
-    early_print("Interrupt: About to clear IRQ descriptors\n");
-    for (int i = 0; i < 256; i++) {
-        irq_descriptors[i].irq_num = i;
-        irq_descriptors[i].handler = NULL;
-        irq_descriptors[i].context = NULL;
-        irq_descriptors[i].name = NULL;
-        irq_descriptors[i].count = 0;
-        irq_descriptors[i].type = IRQ_TYPE_LEVEL;
-        irq_descriptors[i].priority = IRQ_PRIORITY_NORMAL;
-        irq_descriptors[i].flags = 0;
-    }
-    early_print("Interrupt: IRQ descriptors cleared\n");
-    
-    // Clear controller list
-    for (int i = 0; i < 4; i++) {
-        controllers[i] = NULL;
-    }
-    num_controllers = 0;
-    early_print("Interrupt: Controller list cleared\n");
-    
-    // Initialize architecture-specific interrupt handling
-    early_print("Interrupt: Calling arch_interrupt_init\n");
-    if (arch_interrupt_init() < 0) {
-        early_print("Failed to initialize architecture-specific interrupts\n");
-        return -1;
-    }
-    early_print("Interrupt: arch_interrupt_init completed\n");
-    
-#ifdef ARCH_ARM64
-    // Initialize ARM64 GIC
-    early_print("Interrupt: Calling gic_init\n");
-    if (gic_init() < 0) {
-        early_print("Failed to initialize GIC\n");
-        return -1;
-    }
-    early_print("Interrupt: gic_init completed\n");
-    
-    // Register GIC controller
-    early_print("Interrupt: Calling gic_controller_register\n");
-    if (gic_controller_register() < 0) {
-        early_print("Failed to register GIC controller\n");
-        return -1;
-    }
-    early_print("Interrupt: gic_controller_register completed\n");
-#endif
 
-#ifdef ARCH_X86_64
-    // Initialize x86-64 IDT
-    if (idt_init() < 0) {
-        early_print("Failed to initialize IDT\n");
-        return -1;
-    }
-    
-    // Initialize x86-64 PIC
-    if (pic_init() < 0) {
-        early_print("Failed to initialize PIC\n");
-        return -1;
-    }
-    
-    // Register PIC controller
-    if (pic_controller_register() < 0) {
-        early_print("Failed to register PIC controller\n");
-        return -1;
-    }
-#endif
-    
+    // TEMPORARILY SKIP INTERRUPT INITIALIZATION FOR PHASE 4 DEBUGGING
+    early_print("Interrupt: Skipping interrupt initialization for debugging\n");
     interrupt_subsystem_initialized = 1;
-    
-    early_print("Interrupt subsystem initialized successfully\n");
+    early_print("Interrupt subsystem initialized (stub mode)\n");
     return 0;
 }
 

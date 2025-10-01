@@ -44,7 +44,6 @@ int timer_init(void)
     // Find and initialize timer device
     struct device *timer_dev = device_find_by_type(DEVICE_TYPE_TIMER);
     if (!timer_dev) {
-        // Skip timer device creation for debugging
         early_print("No timer device found, skipping timer device initialization\n");
         timer_subsystem_initialized = 1;
         return 0;

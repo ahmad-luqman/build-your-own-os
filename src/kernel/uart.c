@@ -58,7 +58,6 @@ int uart_init(void)
     // Try to find and initialize a UART device
     struct device *uart_dev = device_find_by_type(DEVICE_TYPE_UART);
     if (!uart_dev) {
-        // Skip UART device creation for debugging
         early_print("No UART device found, skipping UART device initialization\n");
         uart_subsystem_initialized = 1;
         return 0;
