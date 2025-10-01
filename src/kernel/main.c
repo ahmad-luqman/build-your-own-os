@@ -300,7 +300,7 @@ void kernel_main(struct boot_info *boot_info)
     if (fd_init() != VFS_SUCCESS) {
         kernel_panic("File descriptor system initialization failed");
     }
-    
+
     // Create and format RAM disk for testing
     struct block_device *ramdisk = ramdisk_create("ram0", 1024 * 1024);  // 1MB
     if (!ramdisk) {

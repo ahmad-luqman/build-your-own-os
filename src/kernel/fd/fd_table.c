@@ -39,7 +39,7 @@ struct fd_table *fd_table_create(void)
     if (!table) {
         return NULL;
     }
-    
+
     // Initialize all file descriptors as unused
     for (int i = 0; i < MAX_OPEN_FILES; i++) {
         table->fds[i].flags = 0;  // Not FD_FLAG_USED
@@ -47,10 +47,10 @@ struct fd_table *fd_table_create(void)
         table->fds[i].open_flags = 0;
         table->fds[i].mode = 0;
     }
-    
+
     table->next_fd = 0;
     table->ref_count = 1;
-    
+
     return table;
 }
 
