@@ -48,37 +48,63 @@ static struct shell_command shell_commands[] = {
 // Initialize shell context
 int shell_init(struct shell_context *ctx)
 {
+    early_print("shell_init: Entry\n");
+    
     if (!ctx) {
+        early_print("shell_init: NULL context\n");
         return SHELL_EINVAL;
     }
     
-    // Initialize context
-    memset(ctx, 0, sizeof(struct shell_context));
+    early_print("shell_init: Context OK\n");
     
-    // Set initial directory to root
-    strcpy(ctx->current_directory, "/");
-    
-    // Initialize command buffer
-    ctx->command_buffer[0] = '\0';
+    // Initialize only essential fields, avoid touching large arrays
     ctx->argc = 0;
+    early_print("shell_init: argc set\n");
+    
     ctx->exit_requested = 0;
+    early_print("shell_init: exit_requested set\n");
     
-    // Initialize history
     ctx->history_count = 0;
+    early_print("shell_init: history_count set\n");
+    
     ctx->history_index = 0;
+    early_print("shell_init: history_index set\n");
     
-    // Set up file descriptors (using current process fd table)
-    ctx->fd_table = fd_get_current_table();
-    if (!ctx->fd_table) {
-        early_print("Failed to get file descriptor table\n");
-        return SHELL_ERROR;
-    }
+    ctx->fd_table = NULL;
+    early_print("shell_init: fd_table set\n");
     
-    // Standard file descriptors should already be set up
-    ctx->stdin_fd = 0;   // Standard input
-    ctx->stdout_fd = 1;  // Standard output  
-    ctx->stderr_fd = 2;  // Standard error
+    ctx->stdin_fd = 0;
+    early_print("shell_init: stdin_fd set\n");
     
+    ctx->stdout_fd = 1;
+    early_print("shell_init: stdout_fd set\n");
+    
+    ctx->stderr_fd = 2;
+    early_print("shell_init: stderr_fd set\n");
+    
+    // Set directory - try to avoid writing to array directly
+    ctx->current_directory[0] = '/';
+    early_print("shell_init: directory[0] set\n");
+    
+    ctx->current_directory[1] = '\0';
+    early_print("shell_init: directory[1] set\n");
+    
+    // Set command buffer
+    ctx->command_buffer[0] = '\0';
+    early_print("shell_init: command_buffer set\n");
+    
+    // Initialize Phase 7 fields to NULL/0
+    ctx->input_buffer = NULL;
+    ctx->buffer_size = 0;
+    ctx->cursor_pos = 0;
+    ctx->buffer_length = 0;
+    ctx->history = NULL;
+    ctx->completion = NULL;
+    ctx->environment = NULL;
+    ctx->env_count = 0;
+    early_print("shell_init: Phase 7 fields set\n");
+    
+    early_print("shell_init: Success\n");
     return SHELL_SUCCESS;
 }
 
@@ -99,7 +125,6 @@ void shell_run(struct shell_context *ctx)
         
         // Read command
         if (shell_read_command(ctx) < 0) {
-            early_print("Failed to read command\n");
             continue;
         }
         
@@ -221,25 +246,47 @@ int shell_init_system(void)
     return SHELL_SUCCESS;
 }
 
+// Global shell context pointer (avoid large static structure)
+// We'll allocate this dynamically to avoid BSS issues
+static struct shell_context *global_shell_context_ptr = NULL;
+
 // Main shell task entry point
 void shell_main_task(void *arg)
 {
     (void)arg;  // Suppress unused parameter warning
     
-    struct shell_context ctx;
+    early_print("shell_main_task: Entry\n");
     
-    // Initialize shell context
-    if (shell_init(&ctx) != SHELL_SUCCESS) {
-        early_print("Failed to initialize shell context\n");
+    // Allocate shell context from heap to avoid BSS/stack issues
+    early_print("Allocating shell context...\n");
+    struct shell_context *ctx = (struct shell_context *)kmalloc(sizeof(struct shell_context));
+    
+    if (!ctx) {
+        early_print("ERROR: Failed to allocate shell context\n");
         return;
     }
     
+    early_print("Shell context allocated successfully\n");
+    global_shell_context_ptr = ctx;
+    
+    early_print("Calling shell_init\n");
+    
+    // Initialize shell context - shell_init will set up the fields
+    if (shell_init(ctx) != SHELL_SUCCESS) {
+        early_print("Failed to initialize shell context\n");
+        kfree(ctx);
+        return;
+    }
+    
+    early_print("shell_init complete, starting shell\n");
+    
     // Run shell
-    shell_run(&ctx);
+    shell_run(ctx);
     
     // Cleanup
-    shell_cleanup(&ctx);
+    shell_cleanup(ctx);
+    kfree(ctx);
+    global_shell_context_ptr = NULL;
     
-    // Task should not return - call exit
-    sys_exit(0);
+    early_print("Shell exited\n");
 }

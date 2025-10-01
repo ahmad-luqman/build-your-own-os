@@ -15,7 +15,7 @@ extern "C" {
 #define SHELL_MAX_ARGS              32
 #define SHELL_MAX_PATH_LENGTH       VFS_MAX_PATH
 #define SHELL_PROMPT                "MiniOS> "
-#define SHELL_HISTORY_SIZE          16
+#define SHELL_HISTORY_SIZE          2   // Reduced from 16
 
 // Forward declarations for Phase 7 advanced features
 struct history_context;
