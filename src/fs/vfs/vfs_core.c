@@ -147,12 +147,12 @@ static struct file_system_type *vfs_find_filesystem_type(const char *name)
 
 int vfs_mount(const char *device, const char *mountpoint, const char *fstype, unsigned long flags)
 {
-    if (!vfs_initialized || !device || !mountpoint || !fstype) {
+    if (!vfs_initialized || !mountpoint || !fstype) {
         return VFS_EINVAL;
     }
     
     early_print("Mounting ");
-    early_print(device);
+    early_print(device ? device : "none");
     early_print(" at ");
     early_print(mountpoint);
     early_print(" (");
@@ -168,13 +168,18 @@ int vfs_mount(const char *device, const char *mountpoint, const char *fstype, un
         return VFS_ENOENT;
     }
     
-    // Find block device
-    struct block_device *block_dev = block_device_find(device);
-    if (!block_dev) {
-        early_print("Block device not found: ");
-        early_print(device);
-        early_print("\n");
-        return VFS_ENOENT;
+    // Find block device (optional for virtual filesystems like ramfs)
+    struct block_device *block_dev = NULL;
+    if (device && strcmp(device, "none") != 0) {
+        block_dev = block_device_find(device);
+        if (!block_dev) {
+            early_print("Block device not found: ");
+            early_print(device);
+            early_print("\n");
+            return VFS_ENOENT;
+        }
+    } else {
+        early_print("Mounting virtual filesystem (no block device)\n");
     }
     
     // Create file system instance
@@ -210,6 +215,7 @@ int vfs_mount(const char *device, const char *mountpoint, const char *fstype, un
         }
         return VFS_ENOMEM;
     }
+    memset(mount, 0, sizeof(struct vfs_mount));  // Use memset for safety
     
     // Initialize mount point
     strncpy(mount->mountpoint, mountpoint, sizeof(mount->mountpoint) - 1);
