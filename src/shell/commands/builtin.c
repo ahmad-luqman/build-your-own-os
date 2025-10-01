@@ -7,6 +7,34 @@
 #include "kernel.h"
 #include "vfs.h"
 
+// Helper function to build full path from current directory and relative path
+static void build_full_path(char *dest, size_t dest_size, const char *current_dir, const char *path)
+{
+    if (path[0] == '/') {
+        // Absolute path
+        strncpy(dest, path, dest_size - 1);
+        dest[dest_size - 1] = '\0';
+    } else {
+        // Relative path
+        if (strcmp(current_dir, "/") == 0) {
+            dest[0] = '/';
+            strncpy(dest + 1, path, dest_size - 2);
+            dest[dest_size - 1] = '\0';
+        } else {
+            // Copy current directory
+            size_t len = strlen(current_dir);
+            if (len < dest_size - 1) {
+                strcpy(dest, current_dir);
+                if (len + 1 < dest_size - 1) {
+                    dest[len] = '/';
+                    strncpy(dest + len + 1, path, dest_size - len - 2);
+                    dest[dest_size - 1] = '\0';
+                }
+            }
+        }
+    }
+}
+
 // Change directory command
 int cmd_cd(struct shell_context *ctx, int argc, char *argv[])
 {
@@ -20,24 +48,35 @@ int cmd_cd(struct shell_context *ctx, int argc, char *argv[])
         path = argv[1];
     }
     
-    // Simple path validation and update
+    // Simple path validation
     if (strlen(path) >= SHELL_MAX_PATH_LENGTH) {
         shell_print_error("Path too long\n");
         return SHELL_EINVAL;
     }
     
-    // For now, just update the current directory string
-    // In the future, this would validate the path exists
-    if (path[0] == '/') {
-        // Absolute path
-        strcpy(ctx->current_directory, path);
-    } else {
-        // Relative path - append to current directory
-        if (strcmp(ctx->current_directory, "/") != 0) {
-            strcat(ctx->current_directory, "/");
-        }
-        strcat(ctx->current_directory, path);
+    // Build full path
+    char full_path[SHELL_MAX_PATH_LENGTH];
+    build_full_path(full_path, sizeof(full_path), ctx->current_directory, path);
+    
+    // Validate that directory exists using VFS
+    struct inode stat_buf;
+    if (vfs_stat(full_path, &stat_buf) != VFS_SUCCESS) {
+        shell_print_error("Directory not found: ");
+        shell_print_error(full_path);
+        shell_print_error("\n");
+        return SHELL_ENOENT;
     }
+    
+    // Check if it's actually a directory
+    if ((stat_buf.mode & VFS_FILE_DIRECTORY) == 0) {
+        shell_print_error("Not a directory: ");
+        shell_print_error(full_path);
+        shell_print_error("\n");
+        return SHELL_EINVAL;
+    }
+    
+    // Update current directory
+    strcpy(ctx->current_directory, full_path);
     
     // Ensure path ends without trailing slash (unless root)
     size_t len = strlen(ctx->current_directory);
@@ -86,18 +125,59 @@ int cmd_ls(struct shell_context *ctx, int argc, char *argv[])
         }
     }
     
-    // For now, simulate directory listing
-    shell_printf("Directory listing for %s:\n", path);
+    // Build full path if relative
+    char full_path[SHELL_MAX_PATH_LENGTH];
+    build_full_path(full_path, sizeof(full_path), ctx->current_directory, path);
     
-    if (show_details) {
-        shell_print("drwxr-xr-x  2 root root   4096 Jan  1 00:00 .\n");
-        shell_print("drwxr-xr-x  3 root root   4096 Jan  1 00:00 ..\n");
-        shell_print("-rw-r--r--  1 root root     42 Jan  1 00:00 test.txt\n");
-        shell_print("drwxr-xr-x  2 root root   4096 Jan  1 00:00 bin\n");
-    } else {
-        shell_print(".  ..  test.txt  bin\n");
+    // Try to open directory using VFS
+    int fd = vfs_open(full_path, VFS_O_RDONLY, 0);
+    if (fd < 0) {
+        shell_print_error("Cannot open directory: ");
+        shell_print_error(full_path);
+        shell_print_error("\n");
+        return SHELL_ENOENT;
     }
     
+    // Read directory entries
+    struct dirent entries[16];  // Read up to 16 entries at a time
+    int count = vfs_readdir(fd, entries, 16);
+    
+    if (count < 0) {
+        shell_print_error("Failed to read directory\n");
+        vfs_close(fd);
+        return SHELL_ERROR;
+    }
+    
+    if (count == 0) {
+        shell_print("(empty directory)\n");
+    } else {
+        if (show_details) {
+            // Show detailed listing
+            for (int i = 0; i < count; i++) {
+                struct dirent *ent = &entries[i];
+                
+                // Display file type
+                char type = '-';
+                if (ent->type & VFS_FILE_DIRECTORY) {
+                    type = 'd';
+                } else if (ent->type & VFS_FILE_SYMLINK) {
+                    type = 'l';
+                }
+                
+                shell_printf("%crw-r--r--  1 root root      0 Jan  1 00:00 %s\n", 
+                           type, ent->name);
+            }
+        } else {
+            // Simple listing
+            for (int i = 0; i < count; i++) {
+                shell_print(entries[i].name);
+                shell_print("  ");
+            }
+            shell_print("\n");
+        }
+    }
+    
+    vfs_close(fd);
     return SHELL_SUCCESS;
 }
 
@@ -111,11 +191,35 @@ int cmd_cat(struct shell_context *ctx, int argc, char *argv[])
     
     const char *filename = argv[1];
     
-    // For now, simulate file reading
-    shell_printf("Contents of %s:\n", filename);
-    shell_print("This is a sample file content.\n");
-    shell_print("MiniOS file system is working!\n");
+    // Build full path if relative
+    char full_path[SHELL_MAX_PATH_LENGTH];
+    build_full_path(full_path, sizeof(full_path), ctx->current_directory, filename);
     
+    // Open file using VFS
+    int fd = vfs_open(full_path, VFS_O_RDONLY, 0);
+    if (fd < 0) {
+        shell_print_error("Cannot open file: ");
+        shell_print_error(full_path);
+        shell_print_error("\n");
+        return SHELL_ENOENT;
+    }
+    
+    // Read and display file contents
+    char buffer[256];
+    ssize_t bytes_read;
+    
+    while ((bytes_read = vfs_read(fd, buffer, sizeof(buffer) - 1)) > 0) {
+        buffer[bytes_read] = '\0';  // Null-terminate for printing
+        shell_print(buffer);
+    }
+    
+    if (bytes_read < 0) {
+        shell_print_error("\nError reading file\n");
+        vfs_close(fd);
+        return SHELL_ERROR;
+    }
+    
+    vfs_close(fd);
     return SHELL_SUCCESS;
 }
 
@@ -129,11 +233,20 @@ int cmd_mkdir(struct shell_context *ctx, int argc, char *argv[])
     
     const char *dirname = argv[1];
     
-    shell_printf("Creating directory: %s\n", dirname);
+    // Build full path if relative
+    char full_path[SHELL_MAX_PATH_LENGTH];
+    build_full_path(full_path, sizeof(full_path), ctx->current_directory, dirname);
     
-    // For now, just simulate creation
-    shell_print("Directory created successfully.\n");
+    // Create directory using VFS
+    int result = vfs_mkdir(full_path, 0755);
+    if (result != VFS_SUCCESS) {
+        shell_print_error("Failed to create directory: ");
+        shell_print_error(full_path);
+        shell_print_error("\n");
+        return SHELL_ERROR;
+    }
     
+    shell_printf("Directory created: %s\n", full_path);
     return SHELL_SUCCESS;
 }
 
@@ -147,11 +260,20 @@ int cmd_rmdir(struct shell_context *ctx, int argc, char *argv[])
     
     const char *dirname = argv[1];
     
-    shell_printf("Removing directory: %s\n", dirname);
+    // Build full path if relative
+    char full_path[SHELL_MAX_PATH_LENGTH];
+    build_full_path(full_path, sizeof(full_path), ctx->current_directory, dirname);
     
-    // For now, just simulate removal
-    shell_print("Directory removed successfully.\n");
+    // Remove directory using VFS
+    int result = vfs_rmdir(full_path);
+    if (result != VFS_SUCCESS) {
+        shell_print_error("Failed to remove directory: ");
+        shell_print_error(full_path);
+        shell_print_error("\n");
+        return SHELL_ERROR;
+    }
     
+    shell_printf("Directory removed: %s\n", full_path);
     return SHELL_SUCCESS;
 }
 
@@ -159,7 +281,7 @@ int cmd_rmdir(struct shell_context *ctx, int argc, char *argv[])
 int cmd_rm(struct shell_context *ctx, int argc, char *argv[])
 {
     if (!ctx || argc < 2) {
-        shell_print_error("Usage: rm <filename>\n");
+        shell_print_error("Usage: rm [-f] <filename>\n");
         return SHELL_EINVAL;
     }
     
@@ -186,15 +308,23 @@ int cmd_rm(struct shell_context *ctx, int argc, char *argv[])
         return SHELL_EINVAL;
     }
     
-    shell_printf("Removing file: %s", filename);
-    if (force) {
-        shell_print(" (forced)");
+    // Build full path if relative
+    char full_path[SHELL_MAX_PATH_LENGTH];
+    build_full_path(full_path, sizeof(full_path), ctx->current_directory, filename);
+    
+    // Remove file using VFS
+    int result = vfs_unlink(full_path);
+    if (result != VFS_SUCCESS) {
+        if (!force) {
+            shell_print_error("Failed to remove file: ");
+            shell_print_error(full_path);
+            shell_print_error("\n");
+            return SHELL_ERROR;
+        }
+        // With -f flag, ignore errors
     }
-    shell_print("\n");
     
-    // For now, just simulate removal
-    shell_print("File removed successfully.\n");
-    
+    shell_printf("File removed: %s\n", full_path);
     return SHELL_SUCCESS;
 }
 
@@ -209,11 +339,58 @@ int cmd_cp(struct shell_context *ctx, int argc, char *argv[])
     const char *source = argv[1];
     const char *dest = argv[2];
     
-    shell_printf("Copying %s to %s\n", source, dest);
+    // Build full paths if relative
+    char src_path[SHELL_MAX_PATH_LENGTH];
+    char dst_path[SHELL_MAX_PATH_LENGTH];
     
-    // For now, just simulate copying
-    shell_print("File copied successfully.\n");
+    build_full_path(src_path, sizeof(src_path), ctx->current_directory, source);
+    build_full_path(dst_path, sizeof(dst_path), ctx->current_directory, dest);
     
+    // Open source file
+    int src_fd = vfs_open(src_path, VFS_O_RDONLY, 0);
+    if (src_fd < 0) {
+        shell_print_error("Cannot open source file: ");
+        shell_print_error(src_path);
+        shell_print_error("\n");
+        return SHELL_ENOENT;
+    }
+    
+    // Open/create destination file
+    int dst_fd = vfs_open(dst_path, VFS_O_WRONLY | VFS_O_CREAT | VFS_O_TRUNC, 0644);
+    if (dst_fd < 0) {
+        shell_print_error("Cannot create destination file: ");
+        shell_print_error(dst_path);
+        shell_print_error("\n");
+        vfs_close(src_fd);
+        return SHELL_ERROR;
+    }
+    
+    // Copy file contents
+    char buffer[512];
+    ssize_t bytes_read;
+    ssize_t bytes_written;
+    
+    while ((bytes_read = vfs_read(src_fd, buffer, sizeof(buffer))) > 0) {
+        bytes_written = vfs_write(dst_fd, buffer, bytes_read);
+        if (bytes_written != bytes_read) {
+            shell_print_error("Write error during copy\n");
+            vfs_close(src_fd);
+            vfs_close(dst_fd);
+            return SHELL_ERROR;
+        }
+    }
+    
+    if (bytes_read < 0) {
+        shell_print_error("Read error during copy\n");
+        vfs_close(src_fd);
+        vfs_close(dst_fd);
+        return SHELL_ERROR;
+    }
+    
+    vfs_close(src_fd);
+    vfs_close(dst_fd);
+    
+    shell_printf("Copied %s to %s\n", src_path, dst_path);
     return SHELL_SUCCESS;
 }
 
@@ -228,11 +405,23 @@ int cmd_mv(struct shell_context *ctx, int argc, char *argv[])
     const char *source = argv[1];
     const char *dest = argv[2];
     
-    shell_printf("Moving %s to %s\n", source, dest);
+    // Build full paths if relative
+    char src_path[SHELL_MAX_PATH_LENGTH];
+    char dst_path[SHELL_MAX_PATH_LENGTH];
     
-    // For now, just simulate moving
-    shell_print("File moved successfully.\n");
+    build_full_path(src_path, sizeof(src_path), ctx->current_directory, source);
+    build_full_path(dst_path, sizeof(dst_path), ctx->current_directory, dest);
     
+    // Use VFS rename operation
+    int result = vfs_rename(src_path, dst_path);
+    if (result != VFS_SUCCESS) {
+        shell_print_error("Failed to move/rename file: ");
+        shell_print_error(src_path);
+        shell_print_error("\n");
+        return SHELL_ERROR;
+    }
+    
+    shell_printf("Moved %s to %s\n", src_path, dst_path);
     return SHELL_SUCCESS;
 }
 
