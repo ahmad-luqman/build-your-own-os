@@ -31,32 +31,14 @@ int fd_init(void)
         return VFS_ENOMEM;
     }
     
-    early_print("FD init: FD table allocated at address: ");
-    // Print address (simplified)
-    early_print(current_fd_table ? "valid\n" : "NULL\n");
+    early_print("FD init: FD table allocated successfully\n");
     
-    early_print("FD init: About to initialize first FD...\n");
-    current_fd_table->fds[0].flags = 0;
-    early_print("FD init: First FD flags set\n");
+    // Use memset to zero the entire structure - safe and optimized
+    early_print("FD init: Zeroing FD table...\n");
+    memset(current_fd_table, 0, sizeof(struct fd_table));
+    early_print("FD init: FD table zeroed\n");
     
-    current_fd_table->fds[0].file = NULL;
-    early_print("FD init: First FD file pointer set\n");
-    
-    current_fd_table->fds[0].open_flags = 0;
-    early_print("FD init: First FD open_flags set\n");
-    
-    current_fd_table->fds[0].mode = 0;
-    early_print("FD init: First FD mode set\n");
-    
-    early_print("FD init: Initializing remaining fields...\n");
-    for (int i = 1; i < MAX_OPEN_FILES; i++) {
-        current_fd_table->fds[i].flags = 0;
-        current_fd_table->fds[i].file = NULL;
-        current_fd_table->fds[i].open_flags = 0;
-        current_fd_table->fds[i].mode = 0;
-    }
-    
-    current_fd_table->next_fd = 0;
+    // Set initial values
     current_fd_table->ref_count = 1;
     
     fd_initialized = 1;

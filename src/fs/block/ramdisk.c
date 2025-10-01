@@ -87,43 +87,53 @@ struct block_device *ramdisk_create(const char *name, size_t size)
         early_print("bytes)\n");
     }
     
-    // Allocate device structure
-    struct block_device *dev = memory_alloc(sizeof(struct block_device), MEMORY_ALIGN_4K);
+    // Allocate device structure using kmalloc (works better for smaller structs)
+    struct block_device *dev = kmalloc(sizeof(struct block_device));
     if (!dev) {
         early_print("Failed to allocate RAM disk device structure\n");
         return NULL;
     }
 
     // Allocate private data
-    struct ramdisk_data *data = memory_alloc(sizeof(struct ramdisk_data), MEMORY_ALIGN_4K);
+    struct ramdisk_data *data = kmalloc(sizeof(struct ramdisk_data));
     if (!data) {
         early_print("Failed to allocate RAM disk private data\n");
-        memory_free(dev);
+        kfree(dev);
         return NULL;
     }
 
-    // Allocate RAM disk memory - use smaller size for testing
-    size_t alloc_size = size > 64*1024 ? 64*1024 : size;  // Cap at 64KB for testing
-    void *memory = memory_alloc(alloc_size, MEMORY_ALIGN_4K);
+    // Allocate RAM disk memory - use kmalloc for smaller size
+    size_t alloc_size = size > 32*1024 ? 32*1024 : size;  // Cap at 32KB for kmalloc
+    void *memory = kmalloc(alloc_size);
     if (!memory) {
         early_print("Failed to allocate RAM disk memory\n");
-        memory_free(data);
-        memory_free(dev);
+        kfree(data);
+        kfree(dev);
         return NULL;
     }
     
-    // Initialize RAM disk data (zero-fill)
-    memset(memory, 0, alloc_size);
+    early_print("RAM disk: About to memset...\n");
+    // Initialize RAM disk data (zero-fill) - do it safely
+    char *ptr = (char *)memory;
+    for (size_t i = 0; i < alloc_size; i++) {
+        ptr[i] = 0;
+    }
+    early_print("RAM disk: memset complete\n");
 
     // Setup private data
+    early_print("RAM disk: Setting up private data...\n");
     data->memory = memory;
     data->size = alloc_size;  // Use actual allocated size
     data->block_size = BLOCK_SIZE_4096;  // Use 4KB blocks
     data->num_blocks = alloc_size / data->block_size;
+    early_print("RAM disk: Private data configured\n");
     
     // Setup device structure
+    early_print("RAM disk: Setting up device structure...\n");
     strncpy(dev->name, name, sizeof(dev->name) - 1);
     dev->name[sizeof(dev->name) - 1] = '\0';
+    early_print("RAM disk: Name copied\n");
+    
     dev->device_type = BLOCK_DEVICE_RAM;
     dev->block_size = data->block_size;
     dev->num_blocks = data->num_blocks;
@@ -131,15 +141,18 @@ struct block_device *ramdisk_create(const char *name, size_t size)
     dev->ops = &ramdisk_ops;
     dev->private_data = data;
     dev->next = NULL;
+    early_print("RAM disk: Device structure configured\n");
     
     // Register device
+    early_print("RAM disk: Registering device...\n");
     if (block_device_register(dev) != BLOCK_SUCCESS) {
         early_print("Failed to register RAM disk\n");
-        memory_free(memory);
-        memory_free(data);
-        memory_free(dev);
+        kfree(memory);
+        kfree(data);
+        kfree(dev);
         return NULL;
     }
+    early_print("RAM disk: Device registered\n");
     
     return dev;
 }
