@@ -130,6 +130,12 @@ void memory_get_stats(struct memory_stats *stats);
  */
 void memory_show_layout(struct boot_info *boot_info);
 
+/**
+ * Check if memory allocator is ready for use
+ * @return 1 if ready, 0 if not
+ */
+int memory_allocator_is_ready(void);
+
 // Architecture-specific functions (implemented per architecture)
 
 /**
