@@ -378,16 +378,22 @@ void kernel_main(struct boot_info *boot_info)
 
         // Read command from UART (blocking)
         while (1) {
-            // Simple UART input - read character directly from UART
-            volatile uint32_t *uart = (volatile uint32_t *)0x09000000;
+            // Proper UART register access for ARM64 PL011
+            volatile uint32_t *uart_dr = (volatile uint32_t *)0x09000000;      // Data register
+            volatile uint32_t *uart_fr = (volatile uint32_t *)0x09000018;      // Flag register
 
-            // Wait for character to be available
-            while (!(*uart & 0x10)) {  // RX FIFO not empty flag
-                // Wait for input
+            // Wait for character to be available (RX FIFO not empty)
+            while (*uart_fr & 0x10) {  // UART_FR_RXFE (bit 4) - RX FIFO empty
+                // Add small delay to prevent tight looping
+                for (volatile int i = 0; i < 1000; i++);
             }
 
-            // Read character
-            c = *uart;
+            // Read character from data register
+            uint32_t data = *uart_dr;
+            c = (char)(data & 0xFF);
+
+            // Add debouncing delay to prevent multiple reads of same character
+            for (volatile int i = 0; i < 10000; i++);
 
             // Handle special characters
             if (c == '\n' || c == '\r') {
@@ -406,8 +412,9 @@ void kernel_main(struct boot_info *boot_info)
                     cmd_pos++;
                     cmd_buffer[cmd_pos] = '\0';
 
-                    // Echo character
-                    *uart = c;
+                    // Echo character back to user
+                    char echo_str[2] = {c, '\0'};
+                    early_print(echo_str);
                 }
             }
             // Ignore other control characters
