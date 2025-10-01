@@ -162,7 +162,7 @@ void memory_show_layout(struct boot_info *boot_info)
 // Simple memory allocation for shell (basic implementation)
 // In a real OS, this would use a proper heap allocator
 
-static char simple_heap[64 * 1024];  // 64KB static heap
+static char simple_heap[256 * 1024];  // 256KB static heap (increased from 64KB)
 static size_t heap_offset = 0;
 
 void *kmalloc(size_t size) {
@@ -173,11 +173,18 @@ void *kmalloc(size_t size) {
     size = (size + 7) & ~7;
     
     if (heap_offset + size > sizeof(simple_heap)) {
+        early_print("kmalloc: OUT OF MEMORY\n");
         return NULL;  // Out of memory
     }
     
     void *ptr = &simple_heap[heap_offset];
     heap_offset += size;
+    
+    // Debug output
+    early_print("kmalloc: Allocated ");
+    // Print size (simplified - just show it worked)
+    early_print(ptr ? "OK" : "FAIL");
+    early_print("\n");
     
     return ptr;
 }

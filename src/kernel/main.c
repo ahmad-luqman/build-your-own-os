@@ -321,18 +321,17 @@ void kernel_main(struct boot_info *boot_info)
         early_print("Warning: RAMFS initialization failed\n");
     }
 
-    // TODO: File descriptor system causes memory exception - needs investigation
-    // The exception occurs when trying to initialize FD array in loop
-    // Likely due to kmalloc returning invalid/misaligned pointer for large structures
-    early_print("File descriptor system: DISABLED (memory allocator issue with large structs)\n");
-    // if (fd_init() == VFS_SUCCESS) {
-    //     early_print("File descriptor system initialized\n");
-    // } else {
-    //     early_print("Warning: File descriptor initialization failed\n");
-    // }
+    // Initialize File descriptor system
+    early_print("Initializing file descriptor system...\n");
+    if (fd_init() == VFS_SUCCESS) {
+        early_print("File descriptor system initialized\n");
+    } else {
+        early_print("Warning: File descriptor initialization failed\n");
+    }
 
-    // TODO: RAM disk creation also causes memory exception
-    early_print("RAM disk: DISABLED (memory allocator issue)\n");
+    // TODO: RAM disk has issues with block_device_register - skip for now
+    // Creating RAM disk...
+    early_print("RAM disk: SKIPPED (block_device_register issue)\n");
     // struct block_device *ramdisk = ramdisk_create("ramdisk0", 4 * 1024 * 1024);
     // if (ramdisk) {
     //     early_print("RAM disk created successfully\n");
@@ -340,7 +339,7 @@ void kernel_main(struct boot_info *boot_info)
     //     early_print("Warning: RAM disk creation failed\n");
     // }
 
-    // Mount RAMFS filesystem (works without FD system and RAM disk)
+    // Mount RAMFS filesystem
     early_print("Mounting RAMFS at root...\n");
     if (vfs_mount("none", "/", "ramfs", 0) == VFS_SUCCESS) {
         early_print("RAMFS mounted successfully\n");
@@ -348,15 +347,12 @@ void kernel_main(struct boot_info *boot_info)
         // Get the mounted filesystem
         struct file_system *root_fs = vfs_get_filesystem("/");
         if (root_fs) {
-            early_print("Root filesystem ready\n");
-            
-            // Try to populate initial files (may work with static allocations in RAMFS)
-            early_print("Attempting to populate initial files...\n");
+            early_print("Populating RAMFS with initial files...\n");
             if (ramfs_populate_initial_files(root_fs) == VFS_SUCCESS) {
                 early_print("Initial file structure created\n");
                 ramfs_dump_filesystem_info(root_fs);
             } else {
-                early_print("Warning: Could not populate initial files (expected with current allocator)\n");
+                early_print("Warning: Could not populate initial files\n");
             }
         }
     } else {
@@ -367,8 +363,6 @@ void kernel_main(struct boot_info *boot_info)
     vfs_dump_info();
 
     early_print("File system layer initialized\n");
-    early_print("NOTE: FD system and RAM disk disabled due to memory allocator limitations\n");
-    early_print("      with large structure allocations. This is a known issue for future fix.\n");
 
 #if !defined(PHASE_5_ONLY)
     // Phase 6: Initialize shell system
