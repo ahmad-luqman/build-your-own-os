@@ -356,111 +356,12 @@ void kernel_main(struct boot_info *boot_info)
     
     // Create initial system tasks
     early_print("Starting interactive shell...\n");
-
-    // Create interactive shell with real user input
-    early_print("Starting interactive shell...\n");
-    early_print("MiniOS Shell v1.0 (Interactive Mode)\n");
-    early_print("Type 'help' for available commands, 'exit' to quit\n");
-    early_print("Press Enter after each command.\n\n");
-
-    // Interactive command loop
-    char cmd_buffer[256];
-    int cmd_pos = 0;
-    char c;
-
-    while (1) {
-        // Show prompt
-        early_print("MiniOS> ");
-
-        // Clear command buffer
-        cmd_pos = 0;
-        cmd_buffer[0] = '\0';
-
-        // Read command from UART (blocking)
-        while (1) {
-            // Proper UART register access for ARM64 PL011
-            volatile uint32_t *uart_dr = (volatile uint32_t *)0x09000000;      // Data register
-            volatile uint32_t *uart_fr = (volatile uint32_t *)0x09000018;      // Flag register
-
-            // Wait for character to be available (RX FIFO not empty)
-            while (*uart_fr & 0x10) {  // UART_FR_RXFE (bit 4) - RX FIFO empty
-                // Add small delay to prevent tight looping
-                for (volatile int i = 0; i < 1000; i++);
-            }
-
-            // Read character from data register
-            uint32_t data = *uart_dr;
-            c = (char)(data & 0xFF);
-
-            // Add debouncing delay to prevent multiple reads of same character
-            for (volatile int i = 0; i < 10000; i++);
-
-            // Handle special characters
-            if (c == '\n' || c == '\r') {
-                early_print("\n");  // Echo newline
-                cmd_buffer[cmd_pos] = '\0';
-                break;  // End of command
-            } else if (c == '\b' || c == 127) {  // Backspace
-                if (cmd_pos > 0) {
-                    cmd_pos--;
-                    cmd_buffer[cmd_pos] = '\0';
-                    early_print("\b \b");  // Erase character
-                }
-            } else if (c >= 32 && c <= 126) {  // Printable characters
-                if (cmd_pos < 255) {
-                    cmd_buffer[cmd_pos] = c;
-                    cmd_pos++;
-                    cmd_buffer[cmd_pos] = '\0';
-
-                    // Echo character back to user
-                    char echo_str[2] = {c, '\0'};
-                    early_print(echo_str);
-                }
-            }
-            // Ignore other control characters
-        }
-
-        // Process command
-        if (cmd_pos == 0) {
-            continue;  // Empty command
-        }
-
-        // Simple command parsing
-        if (strcmp(cmd_buffer, "help") == 0) {
-            early_print("Available commands:\n");
-            early_print("  help    - Show this help message\n");
-            early_print("  uname   - Show system information\n");
-            early_print("  free    - Show memory usage\n");
-            early_print("  ps      - Show process information\n");
-            early_print("  echo    - Display text\n");
-            early_print("  clear   - Clear screen\n");
-            early_print("  exit    - Exit shell\n");
-        } else if (strcmp(cmd_buffer, "uname") == 0) {
-            early_print("MiniOS 0.5.0-dev ARM64\n");
-        } else if (strcmp(cmd_buffer, "free") == 0) {
-            early_print("Total: 16MB, Free: 16MB\n");
-        } else if (strcmp(cmd_buffer, "ps") == 0) {
-            early_print("PID  NAME     STATUS\n");
-            early_print("  1  kernel   running\n");
-        } else if (strncmp(cmd_buffer, "echo ", 5) == 0) {
-            early_print(&cmd_buffer[5]);  // Print text after "echo "
-            early_print("\n");
-        } else if (strcmp(cmd_buffer, "clear") == 0) {
-            early_print("\033[2J\033[H");  // ANSI clear screen
-        } else if (strcmp(cmd_buffer, "exit") == 0) {
-            early_print("Exiting interactive shell...\n");
-            break;
-        } else {
-            early_print("Unknown command: ");
-            early_print(cmd_buffer);
-            early_print("\nType 'help' for available commands\n");
-        }
-    }
-
-    early_print("\n🎉 SUCCESS: Interactive shell completed!\n");
-    early_print("Phase 6 shell implementation tested successfully\n");
-
-    // Halt successfully
+    
+    // Run shell directly in main (no process creation yet - simpler for testing)
+    shell_main_task(NULL);
+    
+    // Should never reach here
+    early_print("\n🎉 Shell exited\n");
     arch_halt();
 #endif /* !PHASE_5_ONLY */
 #endif /* !PHASE_4_ONLY */
