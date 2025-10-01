@@ -255,41 +255,69 @@ struct file_system *ramfs_mount(struct block_device *dev, unsigned long flags)
     (void)flags;
     (void)dev;  // RAMFS doesn't need a block device
     
-    early_print("Mounting RAMFS (stub mode - no dynamic allocation)...\n");
+    early_print("RAMFS: Starting mount (using kmalloc)...\n");
     
-    // For now, return a simple success indicator without full initialization
-    // Full implementation requires working kmalloc
+    // Allocate structures using kmalloc (which works!)
+    struct file_system *fs = kmalloc(sizeof(struct file_system));
+    if (!fs) {
+        early_print("RAMFS: Failed to allocate filesystem\n");
+        return NULL;
+    }
+    memset(fs, 0, sizeof(struct file_system));
+    early_print("RAMFS: Filesystem allocated\n");
     
-    // Create a minimal static filesystem structure
-    static struct file_system static_ramfs;
-    static struct ramfs_fs_data static_fs_data;
-    static struct ramfs_node static_root;
+    struct ramfs_fs_data *fs_data = kmalloc(sizeof(struct ramfs_fs_data));
+    if (!fs_data) {
+        early_print("RAMFS: Failed to allocate fs_data\n");
+        kfree(fs);
+        return NULL;
+    }
+    memset(fs_data, 0, sizeof(struct ramfs_fs_data));
+    early_print("RAMFS: FS data allocated\n");
     
-    // Setup root node
-    strcpy(static_root.name, "/");
-    static_root.mode = VFS_FILE_DIRECTORY | 0755;
-    static_root.size = 0;
-    static_root.ino = 1;
-    static_root.data = NULL;
-    static_root.parent = NULL;
-    static_root.children = NULL;
-    static_root.next = NULL;
+    struct ramfs_node *root = kmalloc(sizeof(struct ramfs_node));
+    if (!root) {
+        early_print("RAMFS: Failed to allocate root\n");
+        kfree(fs_data);
+        kfree(fs);
+        return NULL;
+    }
+    memset(root, 0, sizeof(struct ramfs_node));
+    early_print("RAMFS: Root node allocated\n");
     
+    early_print("RAMFS: Setting up root node...\n");
+    // Setup root node - do it very carefully
+    char *name_ptr = root->name;
+    name_ptr[0] = '/';
+    name_ptr[1] = '\0';
+    early_print("RAMFS: Root name set\n");
+    
+    root->mode = VFS_FILE_DIRECTORY | 0755;
+    root->size = 0;
+    root->ino = 1;
+    root->data = NULL;
+    root->parent = NULL;
+    root->children = NULL;
+    root->next = NULL;
+    early_print("RAMFS: Root node setup complete\n");
+    
+    early_print("RAMFS: Setting up filesystem data...\n");
     // Setup filesystem data
-    static_fs_data.root = &static_root;
-    static_fs_data.next_ino = 2;
-    static_fs_data.file_count = 1;
-    static_fs_data.used_memory = 0;
+    fs_data->root = root;
+    fs_data->next_ino = 2;
+    fs_data->file_count = 1;
+    fs_data->used_memory = 0;
     
+    early_print("RAMFS: Setting up filesystem structure...\n");
     // Setup filesystem structure
-    static_ramfs.type = &ramfs_fs_type;
-    static_ramfs.device = dev;
-    static_ramfs.private_data = &static_fs_data;
-    static_ramfs.mount_point = NULL;
-    static_ramfs.flags = 0;
+    fs->type = &ramfs_fs_type;
+    fs->device = dev;
+    fs->private_data = fs_data;
+    fs->mount_point = NULL;
+    fs->flags = 0;
     
-    early_print("RAMFS mounted (static/stub mode)\n");
-    return &static_ramfs;
+    early_print("RAMFS: Mount successful!\n");
+    return fs;
 }
 
 void ramfs_unmount(struct file_system *fs)
