@@ -37,10 +37,22 @@ gdb_history
 
 # Logs
 *.log
+debug*.log
+serial*.log
+qemu*.log
+vm-test*.log
 
 # Backup files
 *.bak
 *.backup
+
+# Temporary text files and summaries
+*_SUMMARY.txt
+*_CONTEXT.txt
+HANDOVER*.txt
+
+# Test files in wrong location
+test_phase*.c
 
 # Aider chat history (keep file, ignore content)
 .aider.chat.history.md
