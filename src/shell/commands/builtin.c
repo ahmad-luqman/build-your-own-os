@@ -369,7 +369,7 @@ int cmd_cp(struct shell_context *ctx, int argc, char *argv[])
     char buffer[512];
     ssize_t bytes_read;
     ssize_t bytes_written;
-    
+
     while ((bytes_read = vfs_read(src_fd, buffer, sizeof(buffer))) > 0) {
         bytes_written = vfs_write(dst_fd, buffer, bytes_read);
         if (bytes_written != bytes_read) {
@@ -379,14 +379,14 @@ int cmd_cp(struct shell_context *ctx, int argc, char *argv[])
             return SHELL_ERROR;
         }
     }
-    
+
     if (bytes_read < 0) {
         shell_print_error("Read error during copy\n");
         vfs_close(src_fd);
         vfs_close(dst_fd);
         return SHELL_ERROR;
     }
-    
+
     vfs_close(src_fd);
     vfs_close(dst_fd);
     

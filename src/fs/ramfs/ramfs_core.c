@@ -144,7 +144,7 @@ struct ramfs_node *ramfs_resolve_path(struct ramfs_fs_data *fs_data, const char 
     if (!fs_data || !path) {
         return NULL;
     }
-    
+
     // Handle root directory
     if (strcmp(path, "/") == 0) {
         return fs_data->root;
@@ -188,7 +188,7 @@ struct ramfs_node *ramfs_resolve_path(struct ramfs_fs_data *fs_data, const char 
         component[comp_idx] = '\0';
         current = ramfs_find_node(current, component);
     }
-    
+
     return current;
 }
 
@@ -397,49 +397,52 @@ int ramfs_create_file(struct file_system *fs, const char *path, uint32_t mode)
     if (!fs || !path) {
         return VFS_EINVAL;
     }
-    
+
     struct ramfs_fs_data *fs_data = (struct ramfs_fs_data *)fs->private_data;
     if (!fs_data) {
         return VFS_ERROR;
     }
-    
-    // Find parent directory
-    char *parent_path = vfs_get_dirname(path);
-    if (!parent_path) {
-        return VFS_ENOMEM;
+
+    char temp_path[VFS_MAX_PATH];
+    strncpy(temp_path, path, sizeof(temp_path));
+    temp_path[sizeof(temp_path) - 1] = '\0';
+
+    struct ramfs_node *parent = NULL;
+    const char *file_name = NULL;
+
+    char *last_slash = strrchr(temp_path, '/');
+    if (!last_slash) {
+        parent = fs_data->root;
+        file_name = temp_path;
+    } else {
+        if (last_slash == temp_path) {
+            parent = fs_data->root;
+        } else {
+            *last_slash = '\0';
+            parent = ramfs_resolve_path(fs_data, temp_path);
+        }
+        file_name = last_slash + 1;
     }
-    
-    struct ramfs_node *parent = ramfs_resolve_path(fs_data, parent_path);
-    kfree(parent_path);
-    
-    if (!parent) {
-        return VFS_ENOENT;
-    }
-    
-    // Get file name
-    char *file_name = vfs_get_filename(path);
-    if (!file_name) {
+
+    if (!parent || !file_name || file_name[0] == '\0') {
         return VFS_EINVAL;
     }
-    
-    // Check if already exists
+
     if (ramfs_find_node(parent, file_name)) {
         return VFS_EEXIST;
     }
-    
-    // Create new file node
+
     struct ramfs_node *file_node = ramfs_create_node(fs_data, file_name, VFS_FILE_REGULAR | mode);
     if (!file_node) {
         return VFS_ENOMEM;
     }
-    
-    // Add to parent
+
     int result = ramfs_add_child(parent, file_node);
     if (result != VFS_SUCCESS) {
         ramfs_destroy_node(file_node);
         return result;
     }
-    
+
     return VFS_SUCCESS;
 }
 
@@ -737,21 +740,7 @@ int ramfs_populate_initial_files(struct file_system *fs)
             welcome->size = len;
         }
     }
-    
-    // Create README in bin
-    ramfs_create_file(fs, "/bin/README", 0644);
-    struct ramfs_node *readme = ramfs_resolve_path(fs_data, "/bin/README");
-    if (readme) {
-        const char *content = "This directory is for executables.\n";
-        size_t len = strlen(content);
-        readme->data = kmalloc(len + 1);
-        if (readme->data) {
-            memcpy(readme->data, content, len);
-            ((char *)readme->data)[len] = '\0';
-            readme->size = len;
-        }
-    }
-    
+
     early_print("Initial file structure created\n");
     return VFS_SUCCESS;
 }
