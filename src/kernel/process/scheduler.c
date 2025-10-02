@@ -8,8 +8,8 @@
 #include "timer.h"
 #include "kernel.h"
 
-// External scheduler reference (defined in process.c)
-struct scheduler g_scheduler;
+// Global scheduler - moved to .data for x86_64 compatibility
+struct scheduler g_scheduler __attribute__((section(".data"))) = {0};
 
 // Forward declarations
 static void cleanup_terminated_tasks(void);
@@ -18,7 +18,9 @@ static void cleanup_terminated_tasks(void);
 void scheduler_init(void) {
     early_print("Initializing scheduler...\n");
     
-    memset(&g_scheduler, 0, sizeof(g_scheduler));
+    // TEMPORARY: Skip memset as it causes crashes on x86_64
+    // g_scheduler is already zero-initialized in .data section
+    // memset(&g_scheduler, 0, sizeof(g_scheduler));
     g_scheduler.time_slice_quantum = 10;  // 10 timer ticks
     g_scheduler.next_pid = 1;
     

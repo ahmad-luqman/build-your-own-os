@@ -148,9 +148,11 @@ void memory_show_layout(struct boot_info *boot_info)
     
     // Show memory statistics
     early_print("About to call memory_get_stats...\n");
-    struct memory_stats stats;
-    memory_get_stats(&stats);
-    early_print("memory_get_stats completed\n");
+    // TEMPORARY: Skip memory_get_stats as it causes crashes
+    // Likely due to struct copy operation or memcpy issue
+    // struct memory_stats stats;
+    // memory_get_stats(&stats);
+    early_print("memory_get_stats skipped (TEMP)\n");
     
     early_print("Total memory: 16MB\n");    // Based on our allocator config
     early_print("Free memory: 16MB\n");

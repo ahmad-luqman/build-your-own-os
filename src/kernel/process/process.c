@@ -13,28 +13,33 @@
 // External scheduler reference (defined in scheduler.c)
 extern struct scheduler g_scheduler;
 
-// Task pool for static allocation
-static struct task g_task_pool[MAX_TASKS];
+// Task pool for static allocation - moved to .data for x86_64 compatibility
+static struct task g_task_pool[MAX_TASKS] __attribute__((section(".data"))) = {0};
 static int g_task_pool_bitmap = 0;
 
-// Stack memory pool (simple implementation)
-static char g_stack_pool[MAX_TASKS * TASK_STACK_SIZE] __attribute__((aligned(16)));
+// Stack memory pool (simple implementation) - moved to .data for x86_64 compatibility
+static char g_stack_pool[MAX_TASKS * TASK_STACK_SIZE] __attribute__((aligned(16))) __attribute__((section(".data"))) = {0};
 static int g_stack_pool_bitmap = 0;
 
 // Process management initialization
 int process_init(void) {
     early_print("Initializing process management...\n");
     
+    // TEMPORARY: Skip memset as it causes crashes on x86_64
+    // Arrays are already zero-initialized in .data section
     // Initialize scheduler
-    memset(&g_scheduler, 0, sizeof(g_scheduler));
+    // memset(&g_scheduler, 0, sizeof(g_scheduler));
+    early_print("Setting scheduler params...\n");
     g_scheduler.time_slice_quantum = 10;  // 10 timer ticks per slice
     g_scheduler.next_pid = 1;  // PID 0 reserved for kernel
     
     // Initialize task pool
-    memset(g_task_pool, 0, sizeof(g_task_pool));
+    // memset(g_task_pool, 0, sizeof(g_task_pool));
+    early_print("Initializing task pool...\n");
     g_task_pool_bitmap = 0;
     
     // Initialize stack pool
+    early_print("Initializing stack pool...\n");
     g_stack_pool_bitmap = 0;
     
     early_print("Process management initialized\n");
