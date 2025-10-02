@@ -108,6 +108,7 @@ int cmd_rmdir(struct shell_context *ctx, int argc, char *argv[]);
 int cmd_rm(struct shell_context *ctx, int argc, char *argv[]);
 int cmd_cp(struct shell_context *ctx, int argc, char *argv[]);
 int cmd_mv(struct shell_context *ctx, int argc, char *argv[]);
+int cmd_touch(struct shell_context *ctx, int argc, char *argv[]);
 int cmd_echo(struct shell_context *ctx, int argc, char *argv[]);
 int cmd_clear(struct shell_context *ctx, int argc, char *argv[]);
 int cmd_help(struct shell_context *ctx, int argc, char *argv[]);

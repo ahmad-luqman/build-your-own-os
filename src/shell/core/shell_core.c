@@ -25,9 +25,10 @@ static struct shell_command shell_commands[] = {
     {"rm", "Remove file", cmd_rm, 1, 2},
     {"cp", "Copy file", cmd_cp, 2, 2},
     {"mv", "Move/rename file", cmd_mv, 2, 2},
+    {"touch", "Create file or update timestamp", cmd_touch, 1, 1},
     
     // Output commands
-    {"echo", "Display text", cmd_echo, 0, -1},  // -1 means unlimited args
+    {"echo", "Display text or write to file", cmd_echo, 0, -1},  // -1 means unlimited args
     {"clear", "Clear screen", cmd_clear, 0, 0},
     
     // System information
