@@ -41,4 +41,8 @@ gdb_history
 # Backup files
 *.bak
 *.backup
-.aider*
+
+# Aider chat history (keep file, ignore content)
+.aider.chat.history.md
+.aider.input.history
+.aider.tags.cache.v4/
