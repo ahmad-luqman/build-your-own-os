@@ -197,8 +197,8 @@ void kernel_main(struct boot_info *boot_info)
         early_print("Memory allocation test completed\n");
     }
 #else
-    early_print("Skipping memory allocation test for now...\n");
-    // test_memory_allocation();  // Temporarily disabled
+    early_print("Running memory allocation test...\n");
+    test_memory_allocation();
 #endif
 
 #if !defined(PHASE_3_ONLY)

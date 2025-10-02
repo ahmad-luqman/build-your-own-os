@@ -6,7 +6,8 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "memory.h"
-#include "boot_protocol.h"
+#include "kernel.h" // For itoa
+#include "string.h"
 
 // Add forward declaration for early_print
 void early_print(const char *str);
