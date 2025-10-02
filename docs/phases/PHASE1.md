@@ -1,4 +1,8 @@
-# Phase 1 Usage Guide - How to Run Foundation Setup
+# Phase 1: Foundation Setup
+
+## Overview
+
+Phase 1 establishes the foundational build system and project structure for MiniOS. This phase creates the cross-platform framework that supports both ARM64 and x86-64 architectures.
 
 ## Quick Start
 
@@ -119,79 +123,9 @@ ls -la build/arm64/       # ARM64 build outputs
 ls -la build/x86_64/      # x86-64 build outputs
 ```
 
-### Development Tools Usage
+## Testing and Validation
 
-#### Prerequisites Management
-```bash
-# Check what's installed/missing
-./tools/check-prerequisites.sh
-
-# Get detailed status
-./tools/check-prerequisites.sh --help
-
-# Re-run after installing tools
-./tools/check-prerequisites.sh
-```
-
-#### VM Testing
-```bash
-# Test specific architecture with timeout
-./tools/test-vm.sh arm64 30        # 30 second timeout
-./tools/test-vm.sh x86_64 60       # 60 second timeout
-
-# Test with GUI (not headless)
-./tools/test-vm.sh arm64 30 false
-
-# Get help
-./tools/test-vm.sh --help
-```
-
-#### Debugging
-```bash
-# Start debug session
-./tools/debug.sh arm64
-./tools/debug.sh x86_64
-
-# Use different GDB port
-./tools/debug.sh arm64 5678
-
-# Get debug help
-./tools/debug.sh --help
-```
-
-#### Image Creation
-```bash
-# Create ARM64 disk image
-python3 tools/create_image.py \
-  --arch arm64 \
-  --kernel build/arm64/kernel.elf \
-  --bootloader build/arm64/bootloader.elf \
-  --output build/arm64/minios.img
-
-# Create x86-64 ISO image
-python3 tools/create_iso.py \
-  --kernel build/x86_64/kernel.elf \
-  --bootloader build/x86_64/bootloader.bin \
-  --output build/x86_64/minios.iso
-
-# Verbose output
-python3 tools/create_image.py --verbose [other options]
-```
-
-#### VM Configuration
-```bash
-# Run ARM64 VM directly
-./vm-configs/qemu-arm64.sh
-
-# Run x86-64 VM directly  
-./vm-configs/qemu-x86_64.sh
-
-# These scripts expect images to exist in build/
-```
-
-### Testing and Validation
-
-#### Automated Testing
+### Automated Testing
 ```bash
 # Run full Phase 1 test suite
 ./tools/test-phase1.sh
@@ -200,7 +134,7 @@ python3 tools/create_image.py --verbose [other options]
 # Pass rate should be 90%+ for healthy Phase 1
 ```
 
-#### Manual Validation
+### Manual Validation
 ```bash
 # 1. Check project structure
 ls -la                     # Should show Makefile, src/, docs/, tools/
@@ -221,6 +155,143 @@ make help                  # Should show help text
 # 5. Test with prerequisites (if installed)
 make ARCH=arm64           # Should build or show clear errors
 make ARCH=x86_64          # Should build or show clear errors
+```
+
+## Detailed Testing Guide
+
+### Quick Validation
+
+#### Step 1: Check Project Structure
+```bash
+cd build-your-own-os
+ls -la
+
+# Expected output: Should show Makefile, docs/, src/, tools/, vm-configs/
+```
+
+#### Step 2: Test Build System
+```bash
+# Show build information
+make info
+
+# Show available commands
+make help
+
+# Test file permissions
+ls -la tools/*.sh vm-configs/*.sh
+# All scripts should be executable (rwxr-xr-x)
+```
+
+#### Step 3: Check Prerequisites
+```bash
+# Run prerequisite checker
+./tools/check-prerequisites.sh
+
+# This will show what's installed and what's missing
+# On first run, it may offer to auto-install missing packages
+```
+
+### Build System Tests
+
+#### Test 1: Makefile Structure
+```bash
+# Verify Makefile exists and has correct structure
+make info
+
+# Expected output:
+# === MiniOS Build System ===
+# Architecture: arm64
+# Build Type: release
+# Compiler: aarch64-elf-gcc (or error if not installed)
+# Build Dir: build/arm64
+# ===========================
+```
+
+#### Test 2: Architecture Support
+```bash
+# Test ARM64 build configuration
+make info ARCH=arm64
+
+# Test x86-64 build configuration
+make info ARCH=x86_64
+
+# Both should show different compiler toolchains
+```
+
+#### Test 3: Debug vs Release Builds
+```bash
+# Test release build (default)
+make info DEBUG=0
+
+# Test debug build
+make info DEBUG=1
+
+# Should show different optimization levels (-O2 vs -O0)
+```
+
+### Tool Validation
+
+#### Test 4: Script Executability
+```bash
+# Check all scripts are executable
+for script in tools/*.sh tools/*.py vm-configs/*.sh; do
+    if [ -x "$script" ]; then
+        echo "✅ $script - executable"
+    else
+        echo "❌ $script - not executable"
+    fi
+done
+```
+
+#### Test 5: Python Tools
+```bash
+# Test image creation tool
+python3 tools/create_image.py --help
+
+# Test ISO creation tool
+python3 tools/create_iso.py --help
+
+# Both should show usage information without errors
+```
+
+## Development Tools Usage
+
+### Prerequisites Management
+```bash
+# Check what's installed/missing
+./tools/check-prerequisites.sh
+
+# Get detailed status
+./tools/check-prerequisites.sh --help
+
+# Re-run after installing tools
+./tools/check-prerequisites.sh
+```
+
+### VM Testing
+```bash
+# Test specific architecture with timeout
+./tools/test-vm.sh arm64 30        # 30 second timeout
+./tools/test-vm.sh x86_64 60       # 60 second timeout
+
+# Test with GUI (not headless)
+./tools/test-vm.sh arm64 30 false
+
+# Get help
+./tools/test-vm.sh --help
+```
+
+### Debugging
+```bash
+# Start debug session
+./tools/debug.sh arm64
+./tools/debug.sh x86_64
+
+# Use different GDB port
+./tools/debug.sh arm64 5678
+
+# Get debug help
+./tools/debug.sh --help
 ```
 
 ## Expected Results at Each Stage
@@ -285,29 +356,6 @@ brew install python3
 python3 --version
 ```
 
-#### Build fails with linking errors
-```bash
-# Check linker scripts exist
-ls -la src/arch/*/linker.ld
-
-# Clean and retry
-make clean
-make ARCH=arm64
-
-# Check for typos in source files
-```
-
-#### VM tests fail immediately
-```bash
-# This is expected without built images
-# First build, then test
-make ARCH=arm64
-make test
-
-# Or check VM without image (should show clear error)
-./tools/test-vm.sh arm64
-```
-
 ### Getting Help
 
 #### Command-Line Help
@@ -317,13 +365,6 @@ make help                           # Build system help
 ./tools/debug.sh --help            # Debugging help
 python3 tools/create_image.py --help  # Image creation help
 ```
-
-#### Documentation
-- **[README.md](../README.md)** - Project overview
-- **[PREREQUISITES.md](PREREQUISITES.md)** - Environment setup
-- **[BUILD.md](BUILD.md)** - Detailed build system guide
-- **[PHASE1_TESTING.md](PHASE1_TESTING.md)** - Testing procedures
-- **[VM_SETUP.md](VM_SETUP.md)** - Virtual machine configuration
 
 ## Success Criteria
 
@@ -361,7 +402,7 @@ python3 tools/create_image.py --help  # Image creation help
 Once Phase 1 is working:
 
 1. **Complete prerequisite installation**
-2. **Test full build process** 
+2. **Test full build process**
 3. **Verify VM environment works**
 4. **Begin Phase 2**: Enhanced bootloader implementation
 
