@@ -63,6 +63,22 @@ int uart_init(void)
         return 0;
     }
     
+    // Bind driver to device if not already bound
+    if (!uart_dev->driver) {
+        early_print("UART device found, binding driver...\n");
+        struct device_driver *uart_driver = driver_find_for_device(uart_dev);
+        if (uart_driver) {
+            if (driver_bind_device(uart_driver, uart_dev) < 0) {
+                early_print("Failed to bind UART driver to device\n");
+                return -1;
+            }
+            early_print("UART driver bound successfully\n");
+        } else {
+            early_print("No UART driver found for device\n");
+            return -1;
+        }
+    }
+    
     // Initialize the UART device
     if (device_initialize(uart_dev) < 0) {
         early_print("Failed to initialize UART device\n");

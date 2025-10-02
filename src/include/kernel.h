@@ -8,21 +8,7 @@
 typedef long ssize_t;
 typedef long off_t;
 
-// Memory allocation functions (declared here, implemented in memory.c)
-void *kmalloc(size_t size);
-void kfree(void *ptr);
-int strlen(const char *str);
-int strcmp(const char *s1, const char *s2);
-int strncmp(const char *s1, const char *s2, size_t n);
-char *strcpy(char *dest, const char *src);
-char *strncpy(char *dest, const char *src, size_t n);
-char *strcat(char *dest, const char *src);
-char *strchr(const char *str, int c);
-char *strrchr(const char *str, int c);
-char *strstr(const char *haystack, const char *needle);
-void *memset(void *s, int c, size_t n);
-void *memcpy(void *dest, const void *src, size_t n);
-int memcmp(const void *s1, const void *s2, size_t n);
+#include "string.h"
 
 // Kernel configuration
 #define KERNEL_VERSION "0.5.0-dev"
@@ -68,8 +54,7 @@ void kernel_main(struct boot_info *boot_info);
 void kernel_panic(const char *message);
 void early_print(const char *str);
 
-// Utility functions
-char *itoa(int value, char *str, int base);
+
 
 // Phase 3 function declarations
 void test_memory_allocation(void);

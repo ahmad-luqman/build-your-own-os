@@ -49,6 +49,22 @@ int timer_init(void)
         return 0;
     }
     
+    // Bind driver to device if not already bound
+    if (!timer_dev->driver) {
+        early_print("Timer device found, binding driver...\n");
+        struct device_driver *timer_driver = driver_find_for_device(timer_dev);
+        if (timer_driver) {
+            if (driver_bind_device(timer_driver, timer_dev) < 0) {
+                early_print("Failed to bind timer driver to device\n");
+                return -1;
+            }
+            early_print("Timer driver bound successfully\n");
+        } else {
+            early_print("No timer driver found for device\n");
+            return -1;
+        }
+    }
+    
     // Initialize the timer device
     if (device_initialize(timer_dev) < 0) {
         early_print("Failed to initialize timer device\n");

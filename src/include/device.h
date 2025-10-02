@@ -14,6 +14,9 @@
 typedef int64_t off_t;
 #endif
 
+// Device subsystem initialization flag
+extern volatile int device_subsystem_initialized;
+
 // Forward declarations
 struct device;
 struct device_driver;
