@@ -9,14 +9,14 @@
 #include "kernel.h"
 
 // Global device list
-static struct device *device_list = NULL;
-static uint32_t device_count = 0;
-static uint32_t next_device_id = 1;
+static struct device * volatile device_list = NULL;
+static volatile uint32_t device_count = 0;
+static volatile uint32_t next_device_id = 1;
 
 // Device statistics
-static uint32_t total_devices = 0;
-static uint32_t active_devices = 0;
-static uint32_t error_devices = 0;
+static volatile uint32_t total_devices = 0;
+static volatile uint32_t active_devices = 0;
+static volatile uint32_t error_devices = 0;
 
 // Device subsystem initialization flag
 volatile int device_subsystem_initialized = 0;
@@ -39,8 +39,10 @@ int device_init(struct boot_info *boot_info)
     
     device_subsystem_initialized = 1;
     
-    // Scan for devices - temporarily disabled for Phase 5 testing
+    // Scan for devices - temporarily disabled while investigating optimization issues
     int discovered = 0;
+    // TODO: Re-enable after fixing UART initialization conflict with early_print
+    // int discovered = arch_device_scan();
     
     early_print("Device subsystem initialized, ");
     // Simple number to string conversion for discovered devices
@@ -80,26 +82,25 @@ struct device *device_create(const char *name, uint32_t type)
         return NULL;
     }
     
-    // Initialize device structure
-    // Copy name (simple string copy)
+    // Zero the entire structure first to ensure all fields are initialized
+    memset(dev, 0, sizeof(struct device));
+    
+    // Copy name safely
     int i;
-    for (i = 0; i < 63 && name[i] != 0; i++) {
+    for (i = 0; i < 63 && name && name[i] != 0; i++) {
         dev->name[i] = name[i];
     }
     dev->name[i] = 0;
     
+    // Initialize device fields
     dev->device_id = next_device_id++;
     dev->type = type;
-    dev->flags = 0;
     dev->state = DEVICE_STATE_UNKNOWN;
-    dev->driver = NULL;
-    dev->private_data = NULL;
-    dev->base_addr = 0;
-    dev->irq_num = 0;
-    dev->vendor_id = 0;
-    dev->device_id_hw = 0;
-    dev->dt_node = NULL;
-    dev->next = NULL;
+    
+    // All other fields are already zero from memset:
+    // flags = 0, driver = NULL, private_data = NULL,
+    // base_addr = 0, irq_num = 0, vendor_id = 0,
+    // device_id_hw = 0, dt_node = NULL, next = NULL
     
     return dev;
 }
@@ -111,8 +112,11 @@ int device_register(struct device *device)
     }
     
     // Add to global device list
+    // Use compiler barrier to prevent reordering of these critical writes
     device->next = device_list;
+    __asm__ volatile("" ::: "memory");  // Compiler barrier
     device_list = device;
+    __asm__ volatile("" ::: "memory");  // Compiler barrier
     device_count++;
     total_devices++;
     

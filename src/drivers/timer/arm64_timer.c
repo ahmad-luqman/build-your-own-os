@@ -124,7 +124,7 @@ int arm64_timer_init(struct device *device)
         return -1;
     }
     
-    // Initialize timer device structure
+    // Initialize timer device structure explicitly
     timer->frequency = read_cntfrq_el0();
     timer->last_count = read_cntpct_el0();
     timer->enabled = 0;
