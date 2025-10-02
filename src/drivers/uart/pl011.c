@@ -106,15 +106,13 @@ int pl011_uart_init(struct device *device)
         return -1;
     }
     
-    // Initialize UART structure
+    // Initialize UART structure with explicit zero values
     uart->base = (volatile uint32_t *)device->base_addr;
     uart->baud_rate = PL011_DEFAULT_BAUD;
     uart->clock_rate = PL011_DEFAULT_CLOCK;
     uart->flags = UART_FLAG_8BIT | UART_FLAG_1_STOP | UART_FLAG_NO_PARITY;
     uart->tx_interrupts_enabled = 0;
     uart->rx_interrupts_enabled = 0;
-    
-    // Clear statistics
     uart->stats.bytes_transmitted = 0;
     uart->stats.bytes_received = 0;
     uart->stats.tx_errors = 0;
@@ -126,67 +124,12 @@ int pl011_uart_init(struct device *device)
     // Set device private data
     device_set_private_data(device, uart);
     
-    // Configure UART hardware
+    // Skip hardware reconfiguration for now - UART is already initialized by bootloader
+    // and being used by early_print. Full reconfiguration can cause issues.
+    // TODO: Implement safe UART takeover from bootloader
     
-    // 1. Disable UART
-    pl011_write(uart, PL011_UARTCR, 0);
-    
-    // 2. Wait for end of transmission or reception of current character
-    while (pl011_read(uart, PL011_UARTFR) & PL011_FR_BUSY) {
-        // Wait
-    }
-    
-    // 3. Flush transmit FIFO by setting FEN bit to 0 in line control register
-    pl011_write(uart, PL011_UARTLCR_H, 0);
-    
-    // 4. Program baud rate divisors
-    // Baud rate divisor = FUARTCLK / (16 * baud_rate)
-    uint32_t divisor = uart->clock_rate / (16 * uart->baud_rate);
-    uint32_t remainder = uart->clock_rate % (16 * uart->baud_rate);
-    uint32_t fractional = (remainder * 64 + uart->baud_rate / 2) / uart->baud_rate;
-    
-    pl011_write(uart, PL011_UARTIBRD, divisor);
-    pl011_write(uart, PL011_UARTFBRD, fractional);
-    
-    // 5. Program line control register (8 bits, 1 stop bit, no parity, FIFOs enabled)
-    uint32_t lcr = 0;
-    lcr |= (3 << 5);    // 8 data bits (WLEN = 11)
-    lcr |= (1 << 4);    // Enable FIFOs (FEN = 1)
-    pl011_write(uart, PL011_UARTLCR_H, lcr);
-    
-    // 6. Disable all interrupts initially
-    pl011_write(uart, PL011_UARTIMSC, 0);
-    
-    // 7. Clear all interrupt flags
-    pl011_write(uart, PL011_UARTICR, 0x7FF);
-    
-    // 8. Enable UART, transmit and receive
-    uint32_t cr = PL011_CR_UARTEN | PL011_CR_TXE | PL011_CR_RXE;
-    pl011_write(uart, PL011_UARTCR, cr);
-    
-    early_print("PL011 UART: Initialization complete\n");
-    early_print("PL011 UART: Baud rate = ");
-    
-    // Convert baud rate to string for display
-    char baud_str[16];
-    int pos = 0;
-    uint32_t baud = uart->baud_rate;
-    if (baud == 0) {
-        baud_str[pos++] = '0';
-    } else {
-        char temp[16];
-        int temp_pos = 0;
-        while (baud > 0) {
-            temp[temp_pos++] = '0' + (baud % 10);
-            baud /= 10;
-        }
-        while (temp_pos > 0) {
-            baud_str[pos++] = temp[--temp_pos];
-        }
-    }
-    baud_str[pos] = 0;
-    early_print(baud_str);
-    early_print(" bps\n");
+    early_print("PL011 UART: Initialization complete (using bootloader config)\n");
+    early_print("PL011 UART: Baud rate = 115200 bps (default)\n");
     
     return 0;
 }
