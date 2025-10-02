@@ -2,20 +2,32 @@
 
 A minimal operating system project designed for educational purposes, supporting ARM64 and x86-64 architectures.
 
-## Project Overview
+## 🚀 Quick Start
 
-This project aims to build a minimal operating system from scratch that can:
-- Boot on ARM64 (for UTM on macOS) and x86-64 architectures
-- Provide a basic shell interface
-- Run simple CLI applications
-- Serve as a learning platform for OS development concepts
+```bash
+git clone https://github.com/ahmadluqman/build-your-own-os.git
+cd build-your-own-os
+
+# Check prerequisites and setup
+./tools/check-prerequisites.sh
+
+# Build and test
+make clean all
+make test
+```
+
+## 📖 Documentation
+
+**Start here:** [docs/README.md](docs/README.md) - Complete documentation and guides
+
+**New developers:** [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) - Setup and first build
 
 ## Current Status
 
 🎉 **Phase 5 Complete - File System Implementation**
 
-✅ **5 of 7 phases complete** (71% progress)  
-✅ **Complete operating system** with file system support  
+✅ **5 of 7 phases complete** (71% progress)
+✅ **Complete operating system** with file system support
 ✅ **Cross-platform** ARM64 (UTM) and x86-64 (QEMU) support
 
 ## Architecture Support
