@@ -11,18 +11,19 @@
 // Memory allocation bitmap
 #define MAX_PAGES           32768       // Support up to 128MB of 4KB pages
 #define BITMAP_SIZE         (MAX_PAGES / 8)
-static uint8_t page_bitmap[BITMAP_SIZE];
+// Move to .data section instead of .bss to ensure GRUB allocates space
+static uint8_t page_bitmap[BITMAP_SIZE] __attribute__((section(".data"))) = {0};
 static uint64_t total_pages = 0;
 static uint64_t free_pages = 0;
 static uint64_t memory_base = 0;
 
 // Memory region tracking
 #define MAX_MEMORY_REGIONS  32
-static struct memory_region memory_regions[MAX_MEMORY_REGIONS];
+static struct memory_region memory_regions[MAX_MEMORY_REGIONS] __attribute__((section(".data"))) = {0};
 static uint32_t num_memory_regions = 0;
 
 // Memory statistics
-static struct memory_stats current_stats = {0};
+static struct memory_stats current_stats __attribute__((section(".data"))) = {0};
 
 // Forward declarations
 static void set_page_used(uint32_t page_num);
@@ -37,21 +38,44 @@ static void add_memory_region(uint64_t base, uint64_t size, uint32_t type);
 void arch_memory_allocator_init(struct memory_map_entry *memory_map,
                                 uint32_t map_entries)
 {
+    extern void early_print(const char *);
+    early_print("allocator_init: Start\n");
+    
+    // Test: Write to stack first (should always work)
+    volatile uint8_t stack_test = 0;
+    stack_test = 42;
+    (void)stack_test;  // Prevent unused warning
+    early_print("allocator_init: Stack test OK\n");
+    
+    // Test: Write to .data section
+    early_print("allocator_init: Testing .data write\n");
+    page_bitmap[0] = 0xFF;
+    early_print("allocator_init: .data write OK\n");
+    
     // Initialize bitmap to all used
+    early_print("allocator_init: Clearing bitmap\n");
+    // Clear in smaller chunks to avoid timeout/watchdog
     for (int i = 0; i < BITMAP_SIZE; i++) {
         page_bitmap[i] = 0xFF;
+        // Output progress every 1024 bytes
+        if (i % 1024 == 0) {
+            early_print(".");
+        }
     }
     
+    early_print("allocator_init: Bitmap cleared\n");
     total_pages = 0;
     free_pages = 0;
     num_memory_regions = 0;
     
     // Process memory map
+    early_print("allocator_init: Processing memory map\n");
     uint64_t total_available = 0;
     uint64_t largest_base = 0;
     uint64_t largest_size = 0;
     
     for (uint32_t i = 0; i < map_entries; i++) {
+        early_print("allocator_init: Processing entry\n");
         add_memory_region(memory_map[i].base, memory_map[i].length, 
                          memory_map[i].type);
         
@@ -66,7 +90,10 @@ void arch_memory_allocator_init(struct memory_map_entry *memory_map,
         }
     }
     
+    early_print("allocator_init: Memory map processed\n");
+    
     if (largest_size == 0) {
+        early_print("allocator_init: No available memory!\n");
         return;  // No available memory
     }
     
@@ -74,6 +101,7 @@ void arch_memory_allocator_init(struct memory_map_entry *memory_map,
     memory_base = largest_base;
     uint64_t usable_size = largest_size;
     
+    early_print("allocator_init: Adjusting memory base\n");
     // Reserve first 1MB for bootloader and BIOS data
     if (memory_base < 0x100000) {
         uint64_t offset = 0x100000 - memory_base;
@@ -81,16 +109,19 @@ void arch_memory_allocator_init(struct memory_map_entry *memory_map,
             memory_base += offset;
             usable_size -= offset;
         } else {
+            early_print("allocator_init: Region too small!\n");
             return;  // Region too small
         }
     }
     
+    early_print("allocator_init: Calculating pages\n");
     // Calculate number of pages we can manage
     total_pages = usable_size / PAGE_SIZE_4K;
     if (total_pages > MAX_PAGES) {
         total_pages = MAX_PAGES;
     }
     
+    early_print("allocator_init: Marking pages free\n");
     // Mark all pages as free initially
     for (uint32_t i = 0; i < total_pages; i++) {
         set_page_free(i);
@@ -98,12 +129,15 @@ void arch_memory_allocator_init(struct memory_map_entry *memory_map,
     
     free_pages = total_pages;
     
+    early_print("allocator_init: Updating stats\n");
     // Update statistics
     current_stats.total_memory = total_available;
     current_stats.free_memory = free_pages * PAGE_SIZE_4K;
     current_stats.used_memory = 0;
     current_stats.total_regions = map_entries;
     current_stats.free_regions = total_pages;
+    
+    early_print("allocator_init: Complete\n");
 }
 
 /**
@@ -174,9 +208,16 @@ void memory_free_pages(void *ptr, size_t num_pages)
  */
 void memory_get_stats(struct memory_stats *stats)
 {
+    extern void early_print(const char *);
+    early_print("memory_get_stats: Entry\n");
+    
     if (stats) {
+        early_print("memory_get_stats: Copying stats\n");
         *stats = current_stats;
+        early_print("memory_get_stats: Stats copied\n");
     }
+    
+    early_print("memory_get_stats: Exit\n");
 }
 
 // Helper functions

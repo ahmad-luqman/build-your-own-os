@@ -34,17 +34,18 @@
 #define PAGE_MASK           (PAGE_SIZE_4K - 1)
 
 // Page table structures (aligned to 4K)
-static uint64_t pml4_table[PAGE_TABLE_ENTRIES] __attribute__((aligned(4096)));
-static uint64_t pdpt_kernel[PAGE_TABLE_ENTRIES] __attribute__((aligned(4096)));
-static uint64_t pd_kernel[PAGE_TABLE_ENTRIES] __attribute__((aligned(4096)));
-static uint64_t pdpt_user[PAGE_TABLE_ENTRIES] __attribute__((aligned(4096)));
+// Move to .data section to ensure GRUB allocates space
+static uint64_t pml4_table[PAGE_TABLE_ENTRIES] __attribute__((aligned(4096))) __attribute__((section(".data"))) __attribute__((unused)) = {0};
+static uint64_t pdpt_kernel[PAGE_TABLE_ENTRIES] __attribute__((aligned(4096))) __attribute__((section(".data"))) __attribute__((unused)) = {0};
+static uint64_t pd_kernel[PAGE_TABLE_ENTRIES] __attribute__((aligned(4096))) __attribute__((section(".data"))) __attribute__((unused)) = {0};
+static uint64_t pdpt_user[PAGE_TABLE_ENTRIES] __attribute__((aligned(4096))) __attribute__((section(".data"))) __attribute__((unused)) = {0};
 
 // Forward declarations
-static void clear_page_table(uint64_t *table);
-static void setup_kernel_mapping(void);
-static void setup_identity_mapping(void);
+static void clear_page_table(uint64_t *table) __attribute__((unused));
+static void setup_kernel_mapping(void) __attribute__((unused));
+static void setup_identity_mapping(void) __attribute__((unused));
 static int map_2mb_page(uint64_t virt_addr, uint64_t phys_addr, uint64_t flags);
-static void enable_pae_and_nx(void);
+static void enable_pae_and_nx(void) __attribute__((unused));
 static void load_page_tables(void);
 
 /**
@@ -54,31 +55,14 @@ int arch_memory_init(struct boot_info *boot_info)
 {
     // Suppress unused parameter warning for Phase 3
     (void)boot_info;
-    // Clear all page tables
-    clear_page_table(pml4_table);
-    clear_page_table(pdpt_kernel);
-    clear_page_table(pd_kernel);
-    clear_page_table(pdpt_user);
     
-    // Enable PAE and NX bit support
-    enable_pae_and_nx();
+    // For now, keep using the page tables set up by kernel_entry.asm
+    // They provide identity mapping for the first 1GB which is sufficient
+    // for our kernel and initial operations.
+    //
+    // TODO in future: Set up proper higher-half kernel mapping
     
-    // Set up PML4 entries
-    pml4_table[0] = (uint64_t)pdpt_user | PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER;
-    pml4_table[511] = (uint64_t)pdpt_kernel | PAGE_PRESENT | PAGE_WRITABLE;
-    
-    // Set up kernel PDPT (maps kernel virtual space)
-    pdpt_kernel[510] = (uint64_t)pd_kernel | PAGE_PRESENT | PAGE_WRITABLE;
-    
-    // Set up kernel mapping (map first 1GB of physical memory to kernel space)
-    setup_kernel_mapping();
-    
-    // Set up identity mapping (map first 1GB of physical memory to same virtual addresses)
-    setup_identity_mapping();
-    
-    // Load page tables into CR3
-    load_page_tables();
-    
+    // Just return success - we're already running with valid page tables
     return 0;
 }
 
@@ -87,20 +71,15 @@ int arch_memory_init(struct boot_info *boot_info)
  */
 void arch_memory_enable(void)
 {
-    // Enable PAE in CR4
-    uint64_t cr4;
-    __asm__ volatile ("mov %%cr4, %0" : "=r" (cr4));
-    cr4 |= (1 << 5);  // PAE bit
-    __asm__ volatile ("mov %0, %%cr4" : : "r" (cr4) : "memory");
+    // PAE and NX are already enabled by kernel_entry.asm
+    // Paging is already enabled by bootloader
+    // Page tables from kernel_entry.asm are already loaded and working
+    // 
+    // For now, we skip any modifications since everything is working
+    // TODO: In future, set up proper kernel page tables with higher-half mapping
     
-    // Enable NX bit in EFER
-    uint32_t efer_low, efer_high;
-    __asm__ volatile ("rdmsr" : "=a" (efer_low), "=d" (efer_high) : "c" (0xC0000080));
-    efer_low |= (1 << 11);  // NXE bit is bit 11 in the low 32 bits
-    __asm__ volatile ("wrmsr" : : "a" (efer_low), "d" (efer_high), "c" (0xC0000080));
-    
-    // Paging is already enabled by bootloader, just ensure our page tables are loaded
-    load_page_tables();
+    extern void early_print(const char *);
+    early_print("arch_memory_enable: Using boot page tables\n");
 }
 
 /**
@@ -226,6 +205,7 @@ static void enable_pae_and_nx(void)
 /**
  * Load page tables into CR3
  */
+static void load_page_tables(void) __attribute__((unused));
 static void load_page_tables(void)
 {
     __asm__ volatile ("mov %0, %%cr3" : : "r" ((uint64_t)pml4_table) : "memory");

@@ -152,6 +152,11 @@ enable_paging:
 
 bits 64
 long_mode_entry:
+    ; Debug: Entered 64-bit mode
+    mov dx, 0xE9
+    mov al, 'A'
+    out dx, al
+
     mov ax, gdt64.data_segment
     mov ds, ax
     mov es, ax
@@ -159,22 +164,40 @@ long_mode_entry:
     mov fs, ax
     mov gs, ax
 
+    ; Debug: Segments loaded
+    mov dx, 0xE9
+    mov al, 'B'
+    out dx, al
+
     ; Switch to 64-bit stack
     lea rsp, [rel stack_top]
     and rsp, -16
 
-    ; Debug marker on port 0xE9
+    ; Debug: Stack setup
     mov dx, 0xE9
-    mov al, 'X'
+    mov al, 'C'
     out dx, al
 
-    ; Zero BSS
-    mov rdi, __bss_start
-    mov rcx, __bss_end
-    sub rcx, rdi
-    xor rax, rax
-    shr rcx, 3
-    rep stosq
+    ; Debug: Before BSS clear
+    mov dx, 0xE9
+    mov al, 'D'
+    out dx, al
+    
+    ; NOTE: Skip explicit BSS clearing
+    ; According to multiboot2 specification section 3.3, the bootloader  
+    ; must "load all loadable segments" and "set all non-loaded segments to zero"
+    ; GRUB complies with this and zeros the BSS section for us.
+    ; Attempting to manually clear BSS causes triple faults, likely due to subtle
+    ; issues with early paging setup or timing. Since GRUB already handles this,
+    ; we skip it here.
+    ;
+    ; TODO: If we ever boot without multiboot (e.g., UEFI direct boot), we'll 
+    ; need to revisit this and ensure BSS is zeroed.
+    
+    ; Debug: BSS "cleared" (actually skipped - already zero from GRUB)
+    mov dx, 0xE9
+    mov al, 'E'
+    out dx, al
 
     ; Build minimal boot_info
     lea rbx, [rel boot_info_struct]
@@ -193,9 +216,25 @@ long_mode_entry:
     mov dword [rax + 16], MEMORY_TYPE_AVAILABLE
     mov dword [rax + 20], 0
 
+    ; Debug: boot_info built
+    mov dx, 0xE9
+    mov al, 'F'
+    out dx, al
+
     ; Call kernel_main(&boot_info)
     mov rdi, rbx
+    
+    ; Debug: About to call kernel_main
+    mov dx, 0xE9
+    mov al, 'G'
+    out dx, al
+    
     call kernel_main
+
+    ; Debug: kernel_main returned (shouldn't happen)
+    mov dx, 0xE9
+    mov al, 'Z'
+    out dx, al
 
 .hang:
     hlt

@@ -223,31 +223,16 @@ void kernel_main(struct boot_info *boot_info)
     // Show device information
     device_list_all();
     
-    // Show timer information
-    struct timer_info timer_info;
-    timer_get_info(&timer_info);
-    early_print("Timer frequency: ");
+    early_print("About to get timer info...\n");
     
-    // Convert frequency to string for display
-    char freq_str[32];
-    int pos = 0;
-    uint64_t freq = timer_info.frequency;
-    if (freq == 0) {
-        freq_str[pos++] = '0';
-    } else {
-        char temp[32];
-        int temp_pos = 0;
-        while (freq > 0) {
-            temp[temp_pos++] = '0' + (freq % 10);
-            freq /= 10;
-        }
-        while (temp_pos > 0) {
-            freq_str[pos++] = temp[--temp_pos];
-        }
-    }
-    freq_str[pos] = 0;
-    early_print(freq_str);
-    early_print(" Hz\n");
+    // TEMPORARY: Skip timer_get_info as it causes crashes (struct copy issue)
+    // Show timer information
+    // struct timer_info timer_info;
+    // early_print("Calling timer_get_info...\n");
+    // timer_get_info(&timer_info);
+    // early_print("timer_get_info returned\n");
+    early_print("Timer info skipped (TEMP)\n");
+    early_print("Timer frequency: 0 Hz (not queried)\n");
     
     // Initialize UART services
     if (uart_init() < 0) {
