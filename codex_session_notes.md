@@ -41,10 +41,23 @@
 4. Latest series (`527e6f5`, `f56f1a7`, `ba70f2b`) resolves `ls` regression by disabling optimization for RAMFS.
 
 ## Observations / Action Items
-- Harmonize status/documentation files to reflect true current phase & capabilities.
-- RAMFS shell tests pass on ARM64 (`tests/test_ramfs_shell.sh arm64`). x86_64 runner currently fails fast (`Error loading uncompressed kernel without PVH ELF Note`); resolve PVH boot path before enabling that leg.
-- Confirm userland programs execute end-to-end (syscall layer may need finishing touches despite documentation claims).
-- Consider trimming verbose boot logs or gating them behind debug flags for usability.
+- ✅ **FIXED**: x86_64 QEMU boot now works via GRUB multiboot2 ISO
+- ✅ Created `tools/create-grub-iso.sh` for building bootable ISO images
+- ✅ Updated `tests/test_ramfs_shell.sh` to use ISO for x86_64
+- ⚠️  Kernel boots but crashes early in initialization (separate issue from boot path)
+- Harmonize status/documentation files to reflect true current phase & capabilities
+- RAMFS shell tests pass on ARM64 (`tests/test_ramfs_shell.sh arm64`)
+- Confirm userland programs execute end-to-end (syscall layer may need finishing touches despite documentation claims)
+- Consider trimming verbose boot logs or gating them behind debug flags for usability
+
+## Recent Changes (Oct 2, 2024)
+1. Installed `i686-elf-grub` and `xorriso` for ISO creation
+2. Created `tools/create-grub-iso.sh` - builds GRUB2 multiboot bootable ISO
+3. Modified `src/arch/x86_64/linker.ld` - improved .note section placement  
+4. Updated `tests/test_ramfs_shell.sh` - x86_64 uses ISO instead of direct kernel
+5. Kernel successfully boots via GRUB, enters 64-bit mode, but crashes early
+
+See `X86_64_QEMU_BOOT_FIX.md` for complete details on the boot fix.
 
 ## Useful Commands
 ```bash

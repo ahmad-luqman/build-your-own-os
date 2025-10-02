@@ -56,6 +56,14 @@ run_for_arch() {
         return 1
     fi
 
+    # Build ISO for x86_64 using GRUB
+    if [ "$arch" = "x86_64" ]; then
+        if ! "$PROJECT_ROOT/tools/create-grub-iso.sh" >/dev/null 2>&1; then
+            fail "ISO creation failed for $arch"
+            return 1
+        fi
+    fi
+
     local kernel_file="$BUILD_DIR/$arch/kernel.elf"
     if [ ! -f "$kernel_file" ]; then
         fail "Kernel ELF not found: $kernel_file"
@@ -66,7 +74,13 @@ run_for_arch() {
     if [ "$arch" = "arm64" ]; then
         qemu_cmd="qemu-system-aarch64 -machine virt -cpu cortex-a72 -m 512M -kernel $kernel_file -nographic -serial mon:stdio"
     else
-        qemu_cmd="qemu-system-x86_64 -m 512M -kernel $kernel_file -nographic -serial mon:stdio"
+        # x86_64 uses ISO with GRUB multiboot2
+        local iso_file="$BUILD_DIR/$arch/minios.iso"
+        if [ ! -f "$iso_file" ]; then
+            fail "ISO file not found: $iso_file"
+            return 1
+        fi
+        qemu_cmd="qemu-system-x86_64 -m 512M -cdrom $iso_file -boot d -nographic -serial mon:stdio"
     fi
 
     local log_file="$BUILD_DIR/test-ramfs-shell-$arch.log"
