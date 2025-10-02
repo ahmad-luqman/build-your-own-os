@@ -425,22 +425,115 @@ int cmd_mv(struct shell_context *ctx, int argc, char *argv[])
     return SHELL_SUCCESS;
 }
 
-// Echo command
+// Echo command with optional output redirection
 int cmd_echo(struct shell_context *ctx, int argc, char *argv[])
 {
     if (!ctx) {
         return SHELL_EINVAL;
     }
     
-    // Print all arguments separated by spaces
+    // Check for output redirection (>)
+    int redirect_index = -1;
     for (int i = 1; i < argc; i++) {
-        if (i > 1) {
-            shell_print(" ");
+        if (strcmp(argv[i], ">") == 0) {
+            redirect_index = i;
+            break;
         }
-        shell_print(argv[i]);
     }
-    shell_print("\n");
     
+    if (redirect_index > 0 && redirect_index < argc - 1) {
+        // Output redirection: echo text > file
+        const char *filename = argv[redirect_index + 1];
+        
+        // Build full path
+        char full_path[SHELL_MAX_PATH_LENGTH];
+        build_full_path(full_path, sizeof(full_path), ctx->current_directory, filename);
+        
+        // Open/create file for writing
+        int fd = vfs_open(full_path, VFS_O_WRONLY | VFS_O_CREAT | VFS_O_TRUNC, 0644);
+        if (fd < 0) {
+            shell_print_error("Cannot create file: ");
+            shell_print_error(full_path);
+            shell_print_error("\n");
+            return SHELL_ERROR;
+        }
+        
+        // Build output string
+        char buffer[1024];
+        size_t pos = 0;
+        for (int i = 1; i < redirect_index; i++) {
+            if (i > 1 && pos < sizeof(buffer) - 1) {
+                buffer[pos++] = ' ';
+            }
+            const char *arg = argv[i];
+            while (*arg && pos < sizeof(buffer) - 1) {
+                buffer[pos++] = *arg++;
+            }
+        }
+        buffer[pos++] = '\n';
+        buffer[pos] = '\0';
+        
+        // Write to file
+        ssize_t written = vfs_write(fd, buffer, pos);
+        vfs_close(fd);
+        
+        if (written < 0) {
+            shell_print_error("Error writing to file\n");
+            return SHELL_ERROR;
+        }
+        
+        // Success - no output to console
+        return SHELL_SUCCESS;
+    } else {
+        // Normal echo - print to console
+        for (int i = 1; i < argc; i++) {
+            if (i > 1) {
+                shell_print(" ");
+            }
+            shell_print(argv[i]);
+        }
+        shell_print("\n");
+        
+        return SHELL_SUCCESS;
+    }
+}
+
+// Touch command - create an empty file or update timestamp
+int cmd_touch(struct shell_context *ctx, int argc, char *argv[])
+{
+    if (!ctx) {
+        return SHELL_EINVAL;
+    }
+    
+    if (argc < 2) {
+        shell_print_error("Usage: touch <file>\n");
+        return SHELL_EINVAL;
+    }
+    
+    const char *path = argv[1];
+    
+    // Build full path
+    char full_path[SHELL_MAX_PATH_LENGTH];
+    build_full_path(full_path, sizeof(full_path), ctx->current_directory, path);
+    
+    // Try to open existing file
+    int fd = vfs_open(full_path, VFS_O_RDONLY, 0);
+    if (fd >= 0) {
+        // File exists - just update access time by opening and closing
+        vfs_close(fd);
+        return SHELL_SUCCESS;
+    }
+    
+    // File doesn't exist - create it
+    fd = vfs_open(full_path, VFS_O_WRONLY | VFS_O_CREAT, 0644);
+    if (fd < 0) {
+        shell_print_error("Cannot create file: ");
+        shell_print_error(full_path);
+        shell_print_error("\n");
+        return SHELL_ERROR;
+    }
+    
+    vfs_close(fd);
     return SHELL_SUCCESS;
 }
 
@@ -502,6 +595,7 @@ int cmd_help(struct shell_context *ctx, int argc, char *argv[])
         
         shell_print("File Operations:\n");
         shell_print("  cat <file>      - Display file contents\n");
+        shell_print("  touch <file>    - Create file or update timestamp\n");
         shell_print("  rm [-f] <file>  - Remove file\n");
         shell_print("  cp <src> <dst>  - Copy file\n");
         shell_print("  mv <src> <dst>  - Move/rename file\n");
@@ -517,6 +611,7 @@ int cmd_help(struct shell_context *ctx, int argc, char *argv[])
         
         shell_print("Other Commands:\n");
         shell_print("  echo [text]     - Display text\n");
+        shell_print("  echo text > file - Write text to file\n");
         shell_print("  clear           - Clear screen\n");
         shell_print("  help [command]  - Show help\n");
         shell_print("  exit [code]     - Exit shell\n");

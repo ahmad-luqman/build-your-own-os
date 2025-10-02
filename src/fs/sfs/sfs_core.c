@@ -406,66 +406,465 @@ uint32_t sfs_find_free_bit(const uint8_t *bitmap, uint32_t size)
     return (uint32_t)-1;  // No free bit found
 }
 
-// File operations implementations (placeholders)
+// SFS inode and block allocation functions
+uint32_t sfs_alloc_block(struct file_system *fs)
+{
+    if (!fs || !fs->private_data) {
+        return 0;
+    }
+    
+    struct sfs_fs_data *data = (struct sfs_fs_data *)fs->private_data;
+    
+    // Find free block in bitmap
+    uint32_t block_num = sfs_find_free_bit(data->block_bitmap, data->superblock.total_blocks);
+    if (block_num == (uint32_t)-1 || block_num >= data->superblock.total_blocks) {
+        return 0;  // No free blocks
+    }
+    
+    // Mark block as used
+    sfs_set_bit(data->block_bitmap, block_num);
+    data->superblock.free_blocks--;
+    
+    return block_num;
+}
+
+void sfs_free_block(struct file_system *fs, uint32_t block_num)
+{
+    if (!fs || !fs->private_data || block_num == 0) {
+        return;
+    }
+    
+    struct sfs_fs_data *data = (struct sfs_fs_data *)fs->private_data;
+    
+    if (block_num >= data->superblock.total_blocks) {
+        return;
+    }
+    
+    // Clear block in bitmap
+    sfs_clear_bit(data->block_bitmap, block_num);
+    data->superblock.free_blocks++;
+}
+
+int sfs_read_block(struct file_system *fs, uint32_t block_num, void *buffer)
+{
+    if (!fs || !fs->private_data || !buffer) {
+        return VFS_EINVAL;
+    }
+    
+    struct sfs_fs_data *data = (struct sfs_fs_data *)fs->private_data;
+    
+    if (block_num >= data->superblock.total_blocks) {
+        return VFS_EINVAL;
+    }
+    
+    return (block_device_read(data->device, block_num, buffer) == BLOCK_SUCCESS) ?
+           VFS_SUCCESS : VFS_EIO;
+}
+
+int sfs_write_block(struct file_system *fs, uint32_t block_num, const void *buffer)
+{
+    if (!fs || !fs->private_data || !buffer) {
+        return VFS_EINVAL;
+    }
+    
+    struct sfs_fs_data *data = (struct sfs_fs_data *)fs->private_data;
+    
+    if (block_num >= data->superblock.total_blocks) {
+        return VFS_EINVAL;
+    }
+    
+    return (block_device_write(data->device, block_num, buffer) == BLOCK_SUCCESS) ?
+           VFS_SUCCESS : VFS_EIO;
+}
+
+// File operations implementations
 static int sfs_file_open(struct file *file, int flags, int mode)
 {
-    (void)file; (void)flags; (void)mode;
+    (void)flags; (void)mode;
+    
+    if (!file || !file->inode) {
+        return VFS_EINVAL;
+    }
+    
+    // For now, just return success
     return VFS_SUCCESS;
 }
 
 static int sfs_file_close(struct file *file)
 {
-    (void)file;
+    if (!file) {
+        return VFS_EINVAL;
+    }
+    
+    // Sync any dirty data
+    if (file->fs && file->fs->device) {
+        block_device_sync(file->fs->device);
+    }
+    
     return VFS_SUCCESS;
 }
 
 static ssize_t sfs_file_read(struct file *file, void *buf, size_t count, off_t offset)
 {
-    (void)file; (void)buf; (void)count; (void)offset;
-    return 0;  // Placeholder: read 0 bytes
+    if (!file || !file->inode || !file->fs || !buf) {
+        return -1;
+    }
+    
+    struct sfs_inode_data *inode_data = (struct sfs_inode_data *)file->inode->private_data;
+    if (!inode_data) {
+        return -1;
+    }
+    
+    struct sfs_inode *disk_inode = &inode_data->disk_inode;
+    
+    // Check bounds
+    if (offset >= (off_t)disk_inode->size) {
+        return 0;  // EOF
+    }
+    
+    // Calculate actual bytes to read
+    size_t bytes_to_read = count;
+    if (offset + (off_t)bytes_to_read > (off_t)disk_inode->size) {
+        bytes_to_read = disk_inode->size - offset;
+    }
+    
+    // Read from direct blocks
+    uint8_t *dest = (uint8_t *)buf;
+    size_t bytes_read = 0;
+    
+    void *block_buffer = kmalloc(SFS_BLOCK_SIZE);
+    if (!block_buffer) {
+        return -1;
+    }
+    
+    while (bytes_read < bytes_to_read) {
+        uint32_t block_index = (offset + bytes_read) / SFS_BLOCK_SIZE;
+        uint32_t block_offset = (offset + bytes_read) % SFS_BLOCK_SIZE;
+        
+        // Only support direct blocks for now
+        if (block_index >= SFS_DIRECT_BLOCKS) {
+            break;  // Indirect blocks not implemented
+        }
+        
+        uint32_t block_num = disk_inode->direct[block_index];
+        if (block_num == 0) {
+            break;  // No more blocks allocated
+        }
+        
+        // Read block
+        if (sfs_read_block(file->fs, block_num, block_buffer) != VFS_SUCCESS) {
+            break;
+        }
+        
+        // Copy data from block
+        size_t copy_size = SFS_BLOCK_SIZE - block_offset;
+        if (copy_size > bytes_to_read - bytes_read) {
+            copy_size = bytes_to_read - bytes_read;
+        }
+        
+        memcpy(dest + bytes_read, (uint8_t *)block_buffer + block_offset, copy_size);
+        bytes_read += copy_size;
+    }
+    
+    kfree(block_buffer);
+    return bytes_read;
 }
 
 static ssize_t sfs_file_write(struct file *file, const void *buf, size_t count, off_t offset)
 {
-    (void)file; (void)buf; (void)count; (void)offset;
-    return 0;  // Placeholder: write 0 bytes
+    if (!file || !file->inode || !file->fs || !buf) {
+        return -1;
+    }
+    
+    struct sfs_inode_data *inode_data = (struct sfs_inode_data *)file->inode->private_data;
+    if (!inode_data) {
+        return -1;
+    }
+    
+    struct sfs_inode *disk_inode = &inode_data->disk_inode;
+    
+    // Write to direct blocks
+    const uint8_t *src = (const uint8_t *)buf;
+    size_t bytes_written = 0;
+    
+    void *block_buffer = kmalloc(SFS_BLOCK_SIZE);
+    if (!block_buffer) {
+        return -1;
+    }
+    
+    while (bytes_written < count) {
+        uint32_t block_index = (offset + bytes_written) / SFS_BLOCK_SIZE;
+        uint32_t block_offset = (offset + bytes_written) % SFS_BLOCK_SIZE;
+        
+        // Only support direct blocks for now
+        if (block_index >= SFS_DIRECT_BLOCKS) {
+            break;  // Indirect blocks not implemented
+        }
+        
+        uint32_t block_num = disk_inode->direct[block_index];
+        
+        // Allocate block if needed
+        if (block_num == 0) {
+            block_num = sfs_alloc_block(file->fs);
+            if (block_num == 0) {
+                break;  // Out of space
+            }
+            disk_inode->direct[block_index] = block_num;
+            disk_inode->blocks++;
+            inode_data->dirty = 1;
+        }
+        
+        // Read existing block if we're doing a partial write
+        if (block_offset != 0 || (count - bytes_written) < SFS_BLOCK_SIZE) {
+            if (sfs_read_block(file->fs, block_num, block_buffer) != VFS_SUCCESS) {
+                memset(block_buffer, 0, SFS_BLOCK_SIZE);
+            }
+        }
+        
+        // Copy data to block
+        size_t copy_size = SFS_BLOCK_SIZE - block_offset;
+        if (copy_size > count - bytes_written) {
+            copy_size = count - bytes_written;
+        }
+        
+        memcpy((uint8_t *)block_buffer + block_offset, src + bytes_written, copy_size);
+        
+        // Write block
+        if (sfs_write_block(file->fs, block_num, block_buffer) != VFS_SUCCESS) {
+            break;
+        }
+        
+        bytes_written += copy_size;
+    }
+    
+    kfree(block_buffer);
+    
+    // Update file size if needed
+    if (offset + (off_t)bytes_written > (off_t)disk_inode->size) {
+        disk_inode->size = offset + bytes_written;
+        file->inode->size = disk_inode->size;
+        inode_data->dirty = 1;
+    }
+    
+    return bytes_written;
 }
 
 static off_t sfs_file_seek(struct file *file, off_t offset, int whence)
 {
-    (void)file; (void)whence;
-    return offset;  // Placeholder
+    if (!file) {
+        return -1;
+    }
+    
+    off_t new_pos = 0;
+    
+    switch (whence) {
+        case VFS_SEEK_SET:
+            new_pos = offset;
+            break;
+        case VFS_SEEK_CUR:
+            new_pos = file->position + offset;
+            break;
+        case VFS_SEEK_END:
+            new_pos = file->inode->size + offset;
+            break;
+        default:
+            return -1;
+    }
+    
+    if (new_pos < 0) {
+        return -1;
+    }
+    
+    file->position = new_pos;
+    return new_pos;
 }
 
 static int sfs_file_sync(struct file *file)
 {
-    (void)file;
-    return VFS_SUCCESS;
+    if (!file || !file->fs) {
+        return VFS_EINVAL;
+    }
+    
+    struct sfs_fs_data *data = (struct sfs_fs_data *)file->fs->private_data;
+    if (!data) {
+        return VFS_EINVAL;
+    }
+    
+    // Sync block device
+    return (block_device_sync(data->device) == BLOCK_SUCCESS) ? VFS_SUCCESS : VFS_EIO;
 }
 
-// Directory operations implementations (placeholders)
+// Directory operations implementations
 static int sfs_dir_readdir(struct file *dir, void *buffer, size_t buffer_size, off_t *offset)
 {
-    (void)dir; (void)buffer; (void)buffer_size; (void)offset;
-    return 0;  // Placeholder: no directory entries
+    if (!dir || !dir->inode || !dir->fs || !buffer || !offset) {
+        return -1;
+    }
+    
+    struct sfs_inode_data *inode_data = (struct sfs_inode_data *)dir->inode->private_data;
+    if (!inode_data) {
+        return -1;
+    }
+    
+    struct sfs_inode *disk_inode = &inode_data->disk_inode;
+    
+    // Check if it's a directory
+    if ((disk_inode->mode & SFS_TYPE_DIRECTORY) == 0) {
+        return -1;
+    }
+    
+    struct dirent *entries = (struct dirent *)buffer;
+    int max_entries = buffer_size / sizeof(struct dirent);
+    int count = 0;
+    
+    // Read directory entries from disk
+    void *block_buffer = kmalloc(SFS_BLOCK_SIZE);
+    if (!block_buffer) {
+        return -1;
+    }
+    
+    int current_offset = 0;
+    
+    // Scan through directory blocks
+    for (uint32_t block_idx = 0; block_idx < SFS_DIRECT_BLOCKS && count < max_entries; block_idx++) {
+        uint32_t block_num = disk_inode->direct[block_idx];
+        if (block_num == 0) {
+            break;  // No more blocks
+        }
+        
+        // Read directory block
+        if (sfs_read_block(dir->fs, block_num, block_buffer) != VFS_SUCCESS) {
+            break;
+        }
+        
+        // Parse directory entries in this block
+        struct sfs_dirent *sfs_entries = (struct sfs_dirent *)block_buffer;
+        int entries_per_block = SFS_BLOCK_SIZE / sizeof(struct sfs_dirent);
+        
+        for (int i = 0; i < entries_per_block && count < max_entries; i++) {
+            if (sfs_entries[i].inode == 0) {
+                continue;  // Empty entry
+            }
+            
+            // Skip to offset
+            if (current_offset < *offset) {
+                current_offset++;
+                continue;
+            }
+            
+            // Fill VFS dirent
+            entries[count].ino = sfs_entries[i].inode;
+            entries[count].type = VFS_FILE_REGULAR;  // Simplified
+            entries[count].name_len = sfs_entries[i].name_len;
+            strncpy(entries[count].name, sfs_entries[i].name, VFS_MAX_NAME);
+            entries[count].name[VFS_MAX_NAME - 1] = '\0';
+            
+            count++;
+            (*offset)++;
+        }
+    }
+    
+    kfree(block_buffer);
+    return count;
 }
 
 static int sfs_dir_mkdir(struct file_system *fs, const char *path, int mode)
 {
-    (void)fs; (void)path; (void)mode;
-    return VFS_SUCCESS;  // Placeholder
+    if (!fs || !path) {
+        return VFS_EINVAL;
+    }
+    
+    // For now, just return success (full implementation would allocate inode and create directory)
+    early_print("SFS mkdir: ");
+    early_print(path);
+    early_print(" - not fully implemented\n");
+    
+    (void)mode;
+    return VFS_SUCCESS;
 }
 
 static int sfs_dir_rmdir(struct file_system *fs, const char *path)
 {
-    (void)fs; (void)path;
-    return VFS_SUCCESS;  // Placeholder
+    if (!fs || !path) {
+        return VFS_EINVAL;
+    }
+    
+    // For now, just return success (full implementation would check empty and free inode)
+    early_print("SFS rmdir: ");
+    early_print(path);
+    early_print(" - not fully implemented\n");
+    
+    return VFS_SUCCESS;
 }
 
 static struct inode *sfs_dir_lookup(struct file_system *fs, struct inode *parent, const char *name)
 {
-    (void)fs; (void)parent; (void)name;
-    return NULL;  // Placeholder: file not found
+    if (!fs || !parent || !name) {
+        return NULL;
+    }
+    
+    struct sfs_inode_data *parent_data = (struct sfs_inode_data *)parent->private_data;
+    if (!parent_data) {
+        return NULL;
+    }
+    
+    struct sfs_inode *parent_inode = &parent_data->disk_inode;
+    
+    // Check if parent is a directory
+    if ((parent_inode->mode & SFS_TYPE_DIRECTORY) == 0) {
+        return NULL;
+    }
+    
+    // Search for name in directory entries
+    void *block_buffer = kmalloc(SFS_BLOCK_SIZE);
+    if (!block_buffer) {
+        return NULL;
+    }
+    
+    struct inode *found_inode = NULL;
+    
+    // Scan through directory blocks
+    for (uint32_t block_idx = 0; block_idx < SFS_DIRECT_BLOCKS; block_idx++) {
+        uint32_t block_num = parent_inode->direct[block_idx];
+        if (block_num == 0) {
+            break;  // No more blocks
+        }
+        
+        // Read directory block
+        if (sfs_read_block(fs, block_num, block_buffer) != VFS_SUCCESS) {
+            break;
+        }
+        
+        // Parse directory entries in this block
+        struct sfs_dirent *entries = (struct sfs_dirent *)block_buffer;
+        int entries_per_block = SFS_BLOCK_SIZE / sizeof(struct sfs_dirent);
+        
+        for (int i = 0; i < entries_per_block; i++) {
+            if (entries[i].inode == 0) {
+                continue;  // Empty entry
+            }
+            
+            if (strcmp(entries[i].name, name) == 0) {
+                // Found it! Create VFS inode
+                found_inode = kmalloc(sizeof(struct inode));
+                if (found_inode) {
+                    memset(found_inode, 0, sizeof(struct inode));
+                    found_inode->ino = entries[i].inode;
+                    found_inode->fs = fs;
+                    found_inode->ref_count = 1;
+                    // Would need to read actual inode from disk here
+                }
+                break;
+            }
+        }
+        
+        if (found_inode) {
+            break;
+        }
+    }
+    
+    kfree(block_buffer);
+    return found_inode;
 }
 
 // Debugging functions
