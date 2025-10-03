@@ -9,10 +9,32 @@
 _start:
     // Disable interrupts
     msr daifset, #0xf
-    
-    // Set up initial stack pointer
-    ldr x0, =stack_top
+
+    // Enable FP/SIMD access at EL1
+    mrs x1, cpacr_el1
+    orr x1, x1, #(3 << 20)
+    msr cpacr_el1, x1
+    isb
+
+    // Set up initial stack pointer at fixed location
+    ldr x0, =0x40200000      // Fixed stack location (well above kernel)
     mov sp, x0
+
+    // Set up stack canary at bottom of stack guard area
+    // Canary pattern: 0xDEADC0DEDEADC0DE
+    ldr x1, =0x401F0000      // Bottom of stack guard
+    ldr x2, =0xDEADC0DE
+    ldr x3, =0xDEADC0DE
+    stp x2, x3, [x1]
+    ldr x2, =0xDEADC0DE
+    ldr x3, =0xDEADC0DE
+    stp x2, x3, [x1, #16]
+    ldr x2, =0xDEADC0DE
+    ldr x3, =0xDEADC0DE
+    stp x2, x3, [x1, #32]
+    ldr x2, =0xDEADC0DE
+    ldr x3, =0xDEADC0DE
+    stp x2, x3, [x1, #48]
     
     // Clear BSS section
     ldr x0, =__bss_start
@@ -84,12 +106,7 @@ halt:
     wfi
     b halt
 
-// Stack space (4KB)
-.section ".bss"
-.align 16
-stack_bottom:
-    .skip 4096
-stack_top:
+// Stack is now at fixed location (0x40140000) - no need to allocate in BSS
 
 // Static boot_info structure
 .align 16

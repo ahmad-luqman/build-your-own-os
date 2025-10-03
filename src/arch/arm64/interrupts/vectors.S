@@ -57,12 +57,25 @@ exception_vectors:
  * Exception handler stubs - save context and call C handlers
  */
 
+// Exception stack base address (dedicated stack for exceptions)
+.set EXCEPTION_STACK_BASE, 0x40300000
+
 .macro save_context
-    // Save general purpose registers
-    sub sp, sp, #(34 * 8)       // Make room for context
+    // Switch to exception stack FIRST
+    mov x5, sp                // Save current SP
+    ldr x6, =EXCEPTION_STACK_BASE
+    mov sp, x6                // Use dedicated exception stack
+
+    // Make room for context FIRST
+    sub sp, sp, #(35 * 8)     // Make room for context + original SP
+
+    // Save original SP at the end
+    str x5, [sp, #(34 * 8)]   // Save original SP
+
+    // Save general purpose registers on exception stack
     stp x0, x1, [sp, #(0 * 8)]
     stp x2, x3, [sp, #(2 * 8)]
-    stp x4, x5, [sp, #(4 * 8)]
+    stp x4, x5, [sp, #(4 * 8)]  // x5 contains original SP (already saved above)
     stp x6, x7, [sp, #(6 * 8)]
     stp x8, x9, [sp, #(8 * 8)]
     stp x10, x11, [sp, #(10 * 8)]
@@ -87,6 +100,9 @@ exception_vectors:
 .endm
 
 .macro restore_context
+    // Save original SP before restoring other registers
+    ldr x5, [sp, #(34 * 8)]   // Load original SP
+
     // Restore system registers
     ldp x0, x1, [sp, #(31 * 8)]
     msr elr_el1, x0
@@ -95,7 +111,7 @@ exception_vectors:
     // Restore general purpose registers
     ldp x0, x1, [sp, #(0 * 8)]
     ldp x2, x3, [sp, #(2 * 8)]
-    ldp x4, x5, [sp, #(4 * 8)]
+    ldp x4, x6, [sp, #(4 * 8)]  // Use x6, x5 holds original SP
     ldp x6, x7, [sp, #(6 * 8)]
     ldp x8, x9, [sp, #(8 * 8)]
     ldp x10, x11, [sp, #(10 * 8)]
@@ -110,7 +126,8 @@ exception_vectors:
     ldp x28, x29, [sp, #(28 * 8)]
     ldr x30, [sp, #(30 * 8)]
 
-    add sp, sp, #(34 * 8)
+    // Restore original SP and clean up
+    mov sp, x5                // Restore original SP
 .endm
 
 // Current EL with SP0 handlers

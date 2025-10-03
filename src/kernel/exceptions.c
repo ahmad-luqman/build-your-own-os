@@ -5,6 +5,7 @@
 
 #include "exceptions.h"
 #include "kernel.h"
+#include <stdint.h>
 
 // Exception subsystem initialization state
 static int exception_initialized = 0;
@@ -18,6 +19,42 @@ static void print_hex_digit(int digit)
     } else {
         char ch[2] = {'A' + digit - 10, 0};
         early_print(ch);
+    }
+}
+
+// Check stack canary for corruption
+static void check_stack_canary(void)
+{
+    early_print("Checking stack canary...\n");
+
+    // Check the canary pattern at 0x401F0000
+    volatile uint64_t *canary = (volatile uint64_t *)0x401F0000;
+    uint64_t expected = 0xDEADC0DE;
+
+    int corrupted = 0;
+    for (int i = 0; i < 8; i++) {
+        if (canary[i] != expected) {
+            early_print("STACK CORRUPTION DETECTED at offset ");
+            early_print("0x");
+            // Print i * 8 in hex
+            int val = i * 8;
+            for (int j = 1; j >= 0; j--) {
+                print_hex_digit((val >> (j * 4)) & 0xF);
+            }
+            early_print("\nExpected: 0xDEADC0DE, Found: 0x");
+            // Print actual value
+            uint64_t actual = canary[i];
+            for (int j = 15; j >= 0; j--) {
+                print_hex_digit((actual >> (j * 4)) & 0xF);
+            }
+            early_print("\n");
+            corrupted = 1;
+            break;
+        }
+    }
+
+    if (!corrupted) {
+        early_print("Stack canary OK\n");
     }
 }
 
@@ -54,13 +91,25 @@ int exception_init(void)
 /**
  * Default exception handler
  */
-void exception_default_handler(uint32_t exception_num, 
+void exception_default_handler(uint32_t exception_num,
                                struct exception_context *ctx)
 {
     early_print("\n*** UNHANDLED EXCEPTION ***\n");
     exception_print_info(exception_num, ctx);
+
+    // Check for stack corruption
+    check_stack_canary();
+
+    // Stack range check
+    early_print("\nStack Information:\n");
+    early_print("Stack base: 0x40200000\n");
+    early_print("Stack limit: 0x401F0000\n");
+    early_print("Current SP: ");
+    // Print SP value from context (saved)
+    early_print("\n");
+
     early_print("\nSystem will halt.\n");
-    
+
     // Disable interrupts and halt system
     arch_interrupts_enable(0);
     arch_halt();
@@ -228,7 +277,23 @@ void exception_print_info(uint32_t exception_num, struct exception_context *ctx)
         print_hex_digit(digit);
     }
     early_print("\n");
-    
+
+    early_print("ESR: 0x");
+    uint64_t esr = ctx->esr;
+    for (int i = 15; i >= 0; i--) {
+        int digit = (esr >> (i * 4)) & 0xF;
+        print_hex_digit(digit);
+    }
+    early_print("\n");
+
+    early_print("FAR: 0x");
+    uint64_t far = ctx->far;
+    for (int i = 15; i >= 0; i--) {
+        int digit = (far >> (i * 4)) & 0xF;
+        print_hex_digit(digit);
+    }
+    early_print("\n");
+
 #elif defined(ARCH_X86_64)
     early_print("RIP: 0x");
     uint64_t rip = ctx->rip;
