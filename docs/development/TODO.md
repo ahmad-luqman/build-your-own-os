@@ -7,20 +7,24 @@ Quick action items organized by priority and timeframe.
 ## 🔴 URGENT (Fix This Week)
 
 ### Critical Bugs
-- [ ] **Fix output redirection** - `echo Hello > file.txt` writes to console instead of file
-  - File: `src/shell/commands/builtin.c` (cmd_echo function)
-  - Issue: Content goes to stdout instead of file
-  - Impact: File creation broken
+- [x] **Fix output redirection** - ✅ FIXED (Jan 3, 2025)
+  - Files modified: `src/include/shell.h`, `src/shell/core/shell_core.c`, `src/shell/parser/parser.c`, `src/shell/commands/builtin.c`
+  - Solution: Added `output_redirect_file` to shell_context for parser-command communication
+  - Testing: Verified in QEMU with RAMFS - `echo Hello > file.txt` now works correctly
+  - Documentation: See `BUG1_FIX_SUMMARY.md` and `BUG1_TEST_RESULTS.md`
+  - Note: Currently using RAMFS (in-memory) - files work but are volatile until Bug #2 is fixed
   
 - [ ] **Fix block device registration** - RAM disk causes crashes
   - File: `src/fs/block/block_device.c`
-  - Issue: block_device_register has issues
-  - Impact: SFS cannot be tested
+  - Issue: block_device_register has issues, currently disabled in main.c line 319
+  - Impact: SFS cannot be tested, only RAMFS available
+  - Current workaround: RAMFS is used as fallback (in-memory filesystem)
   
 - [ ] **Fix relative path handling** - Some paths not resolved correctly
   - File: `src/fs/vfs/vfs_core.c` (vfs_resolve_path)
-  - Issue: Relative paths fail in some cases
-  - Impact: File operations unreliable
+  - Issue: Function is a stub, just copies path without resolving
+  - Impact: Direct VFS calls with relative paths fail
+  - Current workaround: Shell commands use build_full_path() helper
 
 ---
 
@@ -122,9 +126,15 @@ Quick action items organized by priority and timeframe.
 
 ## ✅ RECENTLY COMPLETED
 
+### January 2025
+- ✅ **Fixed output redirection bug** - `echo text > file` now works correctly
+  - Parser and echo command now properly communicate via shell_context
+  - Added automated testing in QEMU
+  - Files written correctly, no console output when redirected
+
 ### October 2024
 - ✅ Implemented `touch` command
-- ✅ Added output redirection syntax (partial)
+- ✅ Added output redirection syntax (partial - completed in January 2025)
 - ✅ Created comprehensive file system documentation (83KB)
 - ✅ Created architecture guide
 - ✅ Created configuration guide

@@ -50,6 +50,9 @@ struct shell_context {
     int stdout_fd;
     int stderr_fd;
     
+    // Output redirection (set by parser, used by commands)
+    char *output_redirect_file;     // File for output redirection (NULL if none)
+    
     // Phase 7: Environment variables
     char **environment;             // Environment variables
     int env_count;                  // Number of environment variables
