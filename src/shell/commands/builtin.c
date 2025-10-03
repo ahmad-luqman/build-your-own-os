@@ -6,6 +6,8 @@
 #include "shell.h"
 #include "kernel.h"
 #include "vfs.h"
+#include "block_device.h"
+#include "sfs.h"
 
 // Helper function to normalize a path (resolve . and ..)
 static void normalize_path(char *dest, size_t dest_size, const char *path)
@@ -312,16 +314,17 @@ int cmd_mkdir(struct shell_context *ctx, int argc, char *argv[])
     // Build full path if relative
     char full_path[SHELL_MAX_PATH_LENGTH];
     build_full_path(full_path, sizeof(full_path), ctx->current_directory, dirname);
-    
+
     // Create directory using VFS
     int result = vfs_mkdir(full_path, 0755);
+
     if (result != VFS_SUCCESS) {
         shell_print_error("Failed to create directory: ");
         shell_print_error(full_path);
         shell_print_error("\n");
         return SHELL_ERROR;
     }
-    
+
     shell_printf("Directory created: %s\n", full_path);
     return SHELL_SUCCESS;
 }
@@ -605,6 +608,87 @@ int cmd_touch(struct shell_context *ctx, int argc, char *argv[])
     return SHELL_SUCCESS;
 }
 
+// Format a block device with SFS
+int cmd_mkfs(struct shell_context *ctx, int argc, char *argv[])
+{
+    (void)ctx;
+
+    if (argc < 2) {
+        shell_print_error("Usage: mkfs <device> [sfs]\n");
+        return SHELL_EINVAL;
+    }
+
+    const char *device_name = argv[1];
+    const char *fs_name = (argc >= 3) ? argv[2] : "sfs";
+
+    if (strcmp(fs_name, "sfs") != 0) {
+        shell_print_error("Unsupported filesystem type\n");
+        return SHELL_EINVAL;
+    }
+
+    struct block_device *dev = block_device_find(device_name);
+    if (!dev) {
+        shell_print_error("Block device not found: ");
+        shell_print_error(device_name);
+        shell_print_error("\n");
+        return SHELL_ENOENT;
+    }
+
+    int result = sfs_format(dev);
+    if (result != VFS_SUCCESS) {
+        shell_printf("Format failed (code %d)\n", result);
+        return SHELL_ERROR;
+    }
+
+    shell_printf("Formatted %s with SFS\n", device_name);
+    return SHELL_SUCCESS;
+}
+
+// Mount a filesystem
+int cmd_mount(struct shell_context *ctx, int argc, char *argv[])
+{
+    (void)ctx;
+
+    if (argc < 3) {
+        shell_print_error("Usage: mount <device> <mountpoint> [fstype]\n");
+        return SHELL_EINVAL;
+    }
+
+    const char *device = argv[1];
+    const char *mountpoint = argv[2];
+    const char *fs_name = (argc >= 4) ? argv[3] : "sfs";
+
+    int result = vfs_mount(device, mountpoint, fs_name, 0);
+    if (result != VFS_SUCCESS) {
+        shell_printf("Mount failed (code %d)\n", result);
+        return SHELL_ERROR;
+    }
+
+    shell_printf("Mounted %s at %s (%s)\n", device, mountpoint, fs_name);
+    return SHELL_SUCCESS;
+}
+
+// Unmount a filesystem
+int cmd_umount(struct shell_context *ctx, int argc, char *argv[])
+{
+    (void)ctx;
+
+    if (argc < 2) {
+        shell_print_error("Usage: umount <mountpoint>\n");
+        return SHELL_EINVAL;
+    }
+
+    const char *mountpoint = argv[1];
+    int result = vfs_unmount(mountpoint);
+    if (result != VFS_SUCCESS) {
+        shell_printf("Unmount failed (code %d)\n", result);
+        return SHELL_ERROR;
+    }
+
+    shell_printf("Unmounted %s\n", mountpoint);
+    return SHELL_SUCCESS;
+}
+
 // Clear screen command
 int cmd_clear(struct shell_context *ctx, int argc, char *argv[])
 {
@@ -668,6 +752,12 @@ int cmd_help(struct shell_context *ctx, int argc, char *argv[])
         shell_print("  cp <src> <dst>  - Copy file\n");
         shell_print("  mv <src> <dst>  - Move/rename file\n");
         shell_print("\n");
+
+        shell_print("Filesystem Commands:\n");
+        shell_print("  mkfs <dev> [sfs]      - Format device with SFS\n");
+        shell_print("  mount <dev> <path>    - Mount filesystem\n");
+        shell_print("  umount <path>         - Unmount filesystem\n");
+        shell_print("\n");
         
         shell_print("System Information:\n");
         shell_print("  ps              - List processes\n");
@@ -712,6 +802,6 @@ int cmd_exit(struct shell_context *ctx, int argc, char *argv[])
     
     shell_printf("Exiting shell with code %d\n", exit_code);
     ctx->exit_requested = 1;
-    
+
     return SHELL_SUCCESS;
 }

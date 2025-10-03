@@ -346,49 +346,49 @@ int ramfs_create_directory(struct file_system *fs, const char *path, uint32_t mo
     if (!fs || !path) {
         return VFS_EINVAL;
     }
-    
+
     struct ramfs_fs_data *fs_data = (struct ramfs_fs_data *)fs->private_data;
     if (!fs_data) {
         return VFS_ERROR;
     }
-    
+
     // Find parent directory
     char *parent_path = vfs_get_dirname(path);
     if (!parent_path) {
         return VFS_ENOMEM;
     }
-    
+
     struct ramfs_node *parent = ramfs_resolve_path(fs_data, parent_path);
     kfree(parent_path);
-    
+
     if (!parent) {
         return VFS_ENOENT;
     }
-    
+
     // Get directory name
     char *dir_name = vfs_get_filename(path);
     if (!dir_name) {
         return VFS_EINVAL;
     }
-    
+
     // Check if already exists
     if (ramfs_find_node(parent, dir_name)) {
         return VFS_EEXIST;
     }
-    
+
     // Create new directory node
     struct ramfs_node *dir_node = ramfs_create_node(fs_data, dir_name, VFS_FILE_DIRECTORY | mode);
     if (!dir_node) {
         return VFS_ENOMEM;
     }
-    
+
     // Add to parent
     int result = ramfs_add_child(parent, dir_node);
     if (result != VFS_SUCCESS) {
         ramfs_destroy_node(dir_node);
         return result;
     }
-    
+
     return VFS_SUCCESS;
 }
 

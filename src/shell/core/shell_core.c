@@ -26,6 +26,9 @@ static struct shell_command shell_commands[] = {
     {"cp", "Copy file", cmd_cp, 2, 2},
     {"mv", "Move/rename file", cmd_mv, 2, 2},
     {"touch", "Create file or update timestamp", cmd_touch, 1, 1},
+    {"mkfs", "Format a block device", cmd_mkfs, 1, 2},
+    {"mount", "Mount a filesystem", cmd_mount, 2, 3},
+    {"umount", "Unmount a filesystem", cmd_umount, 1, 1},
     
     // Output commands
     {"echo", "Display text or write to file", cmd_echo, 0, -1},  // -1 means unlimited args

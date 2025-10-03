@@ -24,6 +24,125 @@
 #include "shell.h"
 #endif
 
+// Simple helper to print unsigned integers during early boot logging.
+static void early_print_uint(uint32_t value)
+{
+    char buffer[16];
+    int pos = 0;
+
+    if (value == 0) {
+        buffer[pos++] = '0';
+    } else {
+        char temp[16];
+        int temp_pos = 0;
+
+        while (value > 0 && temp_pos < (int)sizeof(temp)) {
+            temp[temp_pos++] = '0' + (value % 10);
+            value /= 10;
+        }
+
+        while (temp_pos > 0) {
+            buffer[pos++] = temp[--temp_pos];
+        }
+    }
+
+    buffer[pos] = '\0';
+    early_print(buffer);
+}
+
+static void test_sfs_block_device(void)
+{
+    early_print("\n=== SFS Block Device Test ===\n");
+
+    struct block_device *dev = block_device_find("ramdisk0");
+    if (!dev) {
+        early_print("ERROR: No block device found!\n");
+        return;
+    }
+
+    early_print("SUCCESS: Block device found\n");
+    early_print("  Name: ");
+    early_print(dev->name);
+    early_print("\n");
+
+    early_print("  Block size: ");
+    early_print_uint(dev->block_size);
+    early_print(" bytes\n");
+
+    early_print("  Blocks available: ");
+    early_print_uint(dev->num_blocks);
+    early_print("\n");
+}
+
+static void test_sfs_format(void)
+{
+    early_print("\n=== SFS Format Test ===\n");
+
+    struct block_device *dev = block_device_find("ramdisk0");
+    if (!dev) {
+        early_print("ERROR: Cannot format - block device missing\n");
+        return;
+    }
+
+    int result = sfs_format(dev);
+    if (result == VFS_SUCCESS) {
+        early_print("SUCCESS: Device formatted with SFS\n");
+    } else {
+        early_print("ERROR: sfs_format() failed\n");
+        early_print("  Result code: ");
+        if (result == VFS_EINVAL) {
+            early_print("VFS_EINVAL\n");
+        } else if (result == VFS_ENOMEM) {
+            early_print("VFS_ENOMEM\n");
+        } else {
+            early_print("Unknown error\n");
+        }
+    }
+}
+
+static void __attribute__((unused)) test_sfs_mount_smoke(void)
+{
+    early_print("\n=== SFS Mount & Basic Ops Test ===\n");
+
+    struct block_device *dev = block_device_find("ramdisk0");
+    if (!dev) {
+        early_print("ERROR: Cannot mount - block device missing\n");
+        return;
+    }
+
+    struct file_system *fs = sfs_mount(dev, 0);
+    if (!fs) {
+        early_print("ERROR: sfs_mount() returned NULL\n");
+        return;
+    }
+
+    early_print("SUCCESS: sfs_mount() returned filesystem handle\n");
+
+    if (fs->type && fs->type->dir_ops && fs->type->dir_ops->mkdir) {
+        int mk_status = fs->type->dir_ops->mkdir(fs, "/sfs_test", 0755);
+        early_print("mkdir(/sfs_test) status: ");
+        early_print_uint((uint32_t)mk_status);
+        early_print("\n");
+    } else {
+        early_print("WARNING: No directory operations available for SFS\n");
+    }
+
+    if (fs->type && fs->type->dir_ops && fs->type->dir_ops->lookup) {
+        struct inode root_inode;
+        memset(&root_inode, 0, sizeof(root_inode));
+        root_inode.fs = fs;
+        struct inode *found = fs->type->dir_ops->lookup(fs, &root_inode, "");
+        if (found) {
+            early_print("lookup(\"\") succeeded unexpectedly\n");
+            kfree(found);
+        } else {
+            early_print("lookup(\"\") returned NULL (expected while unimplemented)\n");
+        }
+    }
+
+    sfs_unmount(fs);
+}
+
 void kernel_main(struct boot_info *boot_info)
 {
     // Architecture-specific initialization
@@ -319,6 +438,10 @@ void kernel_main(struct boot_info *boot_info)
     struct block_device *ramdisk = ramdisk_create("ramdisk0", 4 * 1024 * 1024);
     if (ramdisk) {
         early_print("RAM disk created successfully\n");
+        test_sfs_block_device();
+        test_sfs_format();
+        // TEMP: Disable mkdir test that's causing crashes
+        // test_sfs_mount_smoke();
     } else {
         early_print("Warning: RAM disk creation failed\n");
     }

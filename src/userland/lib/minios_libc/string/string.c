@@ -33,12 +33,15 @@ void *memmove(void *dest, const void *src, size_t n) {
 }
 
 void *memset(void *s, int c, size_t n) {
-    unsigned char *p = (unsigned char *)s;
+    volatile unsigned char *p = (volatile unsigned char *)s;
     unsigned char value = (unsigned char)c;
     
     for (size_t i = 0; i < n; i++) {
         p[i] = value;
     }
+    
+    // Memory barrier to ensure writes complete
+    __asm__ volatile("" ::: "memory");
     
     return s;
 }
