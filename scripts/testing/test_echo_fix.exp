@@ -1,0 +1,75 @@
+#!/usr/bin/expect -f
+# Automated test for echo redirection bug fix
+# This script uses expect to automate QEMU interaction
+
+set timeout 30
+
+# Start QEMU
+spawn qemu-system-aarch64 -M virt -cpu cortex-a72 -m 512M -nographic -kernel build/arm64/bootloader.elf -serial mon:stdio
+
+# Wait for shell prompt
+expect {
+    "MiniOS>" { send_user "\n✓ Shell prompt detected\n" }
+    timeout { send_user "\n✗ Timeout waiting for shell\n"; exit 1 }
+}
+
+# Test 1: List initial directory
+send "ls\r"
+expect "MiniOS>"
+
+# Test 2: Try echo with redirection (the bug test)
+send_user "\n========================================\n"
+send_user "Testing: echo Hello World > test.txt\n"
+send_user "========================================\n"
+send "echo Hello World > test.txt\r"
+
+# Check if "Hello World" appears (BUG) or not (FIXED)
+expect {
+    -re "Hello World.*MiniOS>" {
+        send_user "\n🔴 BUG STILL PRESENT: 'Hello World' appeared on console\n"
+        set bug_present 1
+    }
+    "MiniOS>" {
+        send_user "\n🟢 BUG FIXED: No output to console (redirected to file)\n"
+        set bug_present 0
+    }
+    timeout {
+        send_user "\n✗ Timeout\n"
+        exit 1
+    }
+}
+
+# Test 3: List directory to see if file was created
+send "ls\r"
+expect {
+    "test.txt" { send_user "\n✓ File test.txt was created\n" }
+    "MiniOS>" { send_user "\n✗ File test.txt was NOT created\n" }
+}
+expect "MiniOS>"
+
+# Test 4: Cat the file to see if content was written
+send "cat test.txt\r"
+expect {
+    "Hello World" {
+        send_user "\n✓ File contains 'Hello World'\n"
+        if {$bug_present == 0} {
+            send_user "\n========================================\n"
+            send_user "✅ BUG #1 IS FIXED!\n"
+            send_user "========================================\n"
+        }
+    }
+    "MiniOS>" {
+        send_user "\n✗ File is empty or doesn't exist\n"
+        if {$bug_present == 1} {
+            send_user "\n========================================\n"
+            send_user "🔴 BUG #1 STILL EXISTS\n"
+            send_user "========================================\n"
+        }
+    }
+}
+
+# Clean exit
+send "\x01"
+send "x"
+
+send_user "\nTest complete\n"

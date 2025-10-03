@@ -60,8 +60,11 @@ build-your-own-os/
 │   ├── drivers/           # Device drivers
 │   ├── fs/                # File system
 │   └── userland/          # User applications
-├── tools/                  # Build tools and scripts
+├── tools/                  # Build tools and official test scripts
+├── scripts/                # Development and testing scripts
+│   └── testing/           # Testing scripts (see scripts/testing/README.md)
 ├── tests/                  # Testing framework
+├── tmp/                    # Temporary files and test logs (gitignored)
 └── vm-configs/            # Virtual machine configurations
 ```
 
@@ -88,6 +91,7 @@ make test
 4. **Development Plan**: See [DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) - Complete roadmap
 5. **VM Setup**: See [VM_SETUP.md](docs/VM_SETUP.md) - Virtual machine configuration
 6. **Testing Guide**: See [PHASE1_TESTING.md](docs/PHASE1_TESTING.md) - Validation procedures
+7. **Testing Scripts**: See [scripts/testing/README.md](scripts/testing/README.md) - Test script reference
 
 ## Documentation
 
