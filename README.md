@@ -92,6 +92,7 @@ make test
 5. **VM Setup**: See [VM_SETUP.md](docs/VM_SETUP.md) - Virtual machine configuration
 6. **Testing Guide**: See [PHASE1_TESTING.md](docs/PHASE1_TESTING.md) - Validation procedures
 7. **Testing Scripts**: See [scripts/testing/README.md](scripts/testing/README.md) - Test script reference
+8. **Spec-Driven Development**: See [.spec-kit/README.md](.spec-kit/README.md) - Specification-driven workflow
 
 ## Documentation
 

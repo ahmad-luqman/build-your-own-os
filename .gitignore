@@ -58,3 +58,9 @@ test_phase*.c
 .aider.chat.history.md
 .aider.input.history
 .aider.tags.cache.v4/
+
+# Spec Kit working directories (keep templates and docs)
+.spec-kit/memory/
+.spec-kit/*.zip
+.spec-kit/sdd-*/
+
