@@ -115,6 +115,7 @@ void sfs_free_inode(struct file_system *fs, struct inode *inode);
 struct inode *sfs_get_inode(struct file_system *fs, uint32_t inode_num);
 int sfs_put_inode(struct inode *inode);
 int sfs_sync_inode(struct inode *inode);
+struct inode *sfs_resolve_path(struct file_system *fs, const char *path);
 
 // SFS block operations
 uint32_t sfs_alloc_block(struct file_system *fs);
