@@ -181,13 +181,10 @@ void *kmalloc(size_t size) {
     
     void *ptr = &simple_heap[heap_offset];
     heap_offset += size;
-    
-    // Debug output
-    early_print("kmalloc: Allocated ");
-    // Print size (simplified - just show it worked)
-    early_print(ptr ? "OK" : "FAIL");
-    early_print("\n");
-    
+
+    // Debug output with address (simplified)
+    early_print("kmalloc: OK\n");
+
     return ptr;
 }
 

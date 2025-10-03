@@ -5,6 +5,7 @@
 
 #include "shell.h"
 #include "kernel.h"
+#include <stdarg.h>
 
 // Architecture-specific UART register access for input
 #ifdef __aarch64__
@@ -207,106 +208,95 @@ void shell_printf(const char *format, ...)
     if (!format) {
         return;
     }
-    
-    // Simple implementation - just support %s, %d, %x for now
+
     char buffer[512];
     size_t pos = 0;
-    const char *p = format;
-    
-    // Use built-in va_list support if available
-    __builtin_va_list args;
-    __builtin_va_start(args, format);
-    
-    while (*p && pos < sizeof(buffer) - 1) {
-        if (*p == '%' && *(p + 1)) {
-            p++;  // Skip %
-            
-            switch (*p) {
-                case 's': {
-                    const char *str = __builtin_va_arg(args, const char *);
-                    if (str) {
-                        while (*str && pos < sizeof(buffer) - 1) {
-                            buffer[pos++] = *str++;
-                        }
-                    }
-                    break;
-                }
-                
-                case 'd': {
-                    int num = __builtin_va_arg(args, int);
-                    
-                    if (num == 0) {
-                        buffer[pos++] = '0';
-                    } else {
-                        if (num < 0) {
-                            buffer[pos++] = '-';
-                            num = -num;
-                        }
-                        
-                        // Convert number to string
-                        char temp[16];
-                        int temp_pos = 0;
-                        while (num > 0) {
-                            temp[temp_pos++] = '0' + (num % 10);
-                            num /= 10;
-                        }
-                        
-                        // Reverse digits
-                        for (int i = temp_pos - 1; i >= 0 && pos < sizeof(buffer) - 1; i--) {
-                            buffer[pos++] = temp[i];
-                        }
-                    }
-                    break;
-                }
-                
-                case 'x': {
-                    unsigned int num = __builtin_va_arg(args, unsigned int);
-                    const char *hex_digits = "0123456789abcdef";
-                    
-                    if (num == 0) {
-                        buffer[pos++] = '0';
-                    } else {
-                        char hex_str[16];
-                        int hex_pos = 0;
-                        
-                        // Convert to hex
-                        while (num > 0) {
-                            hex_str[hex_pos++] = hex_digits[num % 16];
-                            num /= 16;
-                        }
-                        
-                        // Reverse digits
-                        for (int i = hex_pos - 1; i >= 0 && pos < sizeof(buffer) - 1; i--) {
-                            buffer[pos++] = hex_str[i];
-                        }
-                    }
-                    break;
-                }
-                
-                case '%':
-                    if (pos < sizeof(buffer) - 1) {
-                        buffer[pos++] = '%';
-                    }
-                    break;
-                    
-                default:
-                    // Unknown format, just copy
-                    if (pos < sizeof(buffer) - 1) {
-                        buffer[pos++] = '%';
-                    }
-                    if (pos < sizeof(buffer) - 1) {
-                        buffer[pos++] = *p;
-                    }
-                    break;
-            }
-        } else {
+
+    va_list args;
+    va_start(args, format);
+
+    for (const char *p = format; *p && pos < sizeof(buffer) - 1; ++p) {
+        if (*p != '%' || *(p + 1) == '\0') {
             buffer[pos++] = *p;
+            continue;
         }
-        p++;
+
+        ++p;  // Skip '%'
+
+        switch (*p) {
+            case 's': {
+                const char *str = va_arg(args, const char *);
+                if (!str) {
+                    str = "(null)";
+                }
+                while (*str && pos < sizeof(buffer) - 1) {
+                    buffer[pos++] = *str++;
+                }
+                break;
+            }
+            case 'd': {
+                int value = va_arg(args, int);
+                char temp[16];
+                int idx = 0;
+                if (value < 0) {
+                    if (pos < sizeof(buffer) - 1) {
+                        buffer[pos++] = '-';
+                    }
+                    value = -value;
+                }
+                if (value == 0) {
+                    if (pos < sizeof(buffer) - 1) {
+                        buffer[pos++] = '0';
+                    }
+                    break;
+                }
+                while (value > 0 && idx < (int)sizeof(temp)) {
+                    temp[idx++] = (char)('0' + (value % 10));
+                    value /= 10;
+                }
+                while (idx-- > 0 && pos < sizeof(buffer) - 1) {
+                    buffer[pos++] = temp[idx];
+                }
+                break;
+            }
+            case 'x': {
+                unsigned int value = va_arg(args, unsigned int);
+                char temp[16];
+                int idx = 0;
+                if (value == 0) {
+                    if (pos < sizeof(buffer) - 1) {
+                        buffer[pos++] = '0';
+                    }
+                    break;
+                }
+                while (value > 0 && idx < (int)sizeof(temp)) {
+                    unsigned int digit = value & 0xF;
+                    temp[idx++] = (char)((digit < 10) ? '0' + digit : 'a' + (digit - 10));
+                    value >>= 4;
+                }
+                while (idx-- > 0 && pos < sizeof(buffer) - 1) {
+                    buffer[pos++] = temp[idx];
+                }
+                break;
+            }
+            case '%':
+                if (pos < sizeof(buffer) - 1) {
+                    buffer[pos++] = '%';
+                }
+                break;
+            default:
+                if (pos < sizeof(buffer) - 1) {
+                    buffer[pos++] = '%';
+                }
+                if (pos < sizeof(buffer) - 1) {
+                    buffer[pos++] = *p;
+                }
+                break;
+        }
     }
-    
-    __builtin_va_end(args);
-    
+
+    va_end(args);
+
     buffer[pos] = '\0';
     shell_print(buffer);
 }

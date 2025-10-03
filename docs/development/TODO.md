@@ -48,7 +48,7 @@ Quick action items organized by priority and timeframe.
 - [ ] Improve **error messages** (clearer, more helpful)
 
 ### File System
-- [ ] Complete **SFS testing** with block devices
+- [ ] Complete **SFS testing** with block devices _(unblocked 2025-10-03: `mkfs`/`mkdir` crash fixed by enabling FP/SIMD; see `tmp/SFS_ISSUES_FOUND.md`)_
 - [ ] Add **symbolic links** support
 - [ ] Add **file permissions** checking
 - [ ] Implement **chmod** command
