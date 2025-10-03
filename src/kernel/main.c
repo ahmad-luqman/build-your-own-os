@@ -314,15 +314,14 @@ void kernel_main(struct boot_info *boot_info)
         early_print("Warning: File descriptor initialization failed\n");
     }
 
-    // TODO: RAM disk has issues with block_device_register - skip for now
-    // Creating RAM disk...
-    early_print("RAM disk: SKIPPED (block_device_register issue)\n");
-    // struct block_device *ramdisk = ramdisk_create("ramdisk0", 4 * 1024 * 1024);
-    // if (ramdisk) {
-    //     early_print("RAM disk created successfully\n");
-    // } else {
-    //     early_print("Warning: RAM disk creation failed\n");
-    // }
+    // Create RAM disk block device
+    early_print("Creating RAM disk...\n");
+    struct block_device *ramdisk = ramdisk_create("ramdisk0", 4 * 1024 * 1024);
+    if (ramdisk) {
+        early_print("RAM disk created successfully\n");
+    } else {
+        early_print("Warning: RAM disk creation failed\n");
+    }
 
     // Mount RAMFS filesystem
     early_print("Mounting RAMFS at root...\n");

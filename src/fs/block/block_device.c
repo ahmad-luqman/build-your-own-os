@@ -55,17 +55,24 @@ int block_device_register(struct block_device *dev)
     device_manager.devices = dev;
     device_manager.device_count++;
     
+    // Compiler barrier to ensure list updates complete before statistics init
+    barrier();
+    
     // Initialize statistics
+    // Using volatile fields prevents compiler from optimizing away writes
     dev->reads = 0;
     dev->writes = 0;
     dev->bytes_read = 0;
     dev->bytes_written = 0;
     
+    // Compiler barrier to ensure all initialization completes
+    barrier();
+    
     early_print("Registered block device: ");
     early_print(dev->name);
     early_print(" (");
     
-    // Print size
+    // Print size information
     size_t total_size = (size_t)dev->num_blocks * dev->block_size;
     if (total_size >= 1024 * 1024) {
         char size_str[32];

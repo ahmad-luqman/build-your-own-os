@@ -4,6 +4,11 @@
 #include <stdint.h>
 #include <stddef.h>
 
+// Compiler barriers to prevent optimization issues
+#define barrier() __asm__ __volatile__("" ::: "memory")
+#define READ_ONCE(x) (*(volatile typeof(x) *)&(x))
+#define WRITE_ONCE(x, val) (*(volatile typeof(x) *)&(x) = (val))
+
 // Additional types needed by file system
 typedef long ssize_t;
 typedef long off_t;

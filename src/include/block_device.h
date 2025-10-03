@@ -58,11 +58,11 @@ struct block_device {
     struct block_device_operations *ops;    // Device operations
     void *private_data;                     // Device-specific data
     
-    // Statistics
-    uint64_t reads;                         // Number of read operations
-    uint64_t writes;                        // Number of write operations
-    uint64_t bytes_read;                    // Total bytes read
-    uint64_t bytes_written;                 // Total bytes written
+    // Statistics (volatile to prevent optimization issues)
+    volatile uint64_t reads;                // Number of read operations
+    volatile uint64_t writes;               // Number of write operations
+    volatile uint64_t bytes_read;           // Total bytes read
+    volatile uint64_t bytes_written;        // Total bytes written
     
     // List management
     struct block_device *next;              // Next device in list
