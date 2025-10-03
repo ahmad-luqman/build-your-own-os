@@ -8,6 +8,7 @@
 #include "memory.h"
 #include "kernel.h"
 #include "ramfs.h"
+#include "sfs.h"
 
 // Maximum number of registered file system types
 #define MAX_FS_TYPES        16
@@ -57,6 +58,96 @@ static void vfs_release_fd(int fd)
     if (fd >= VFS_FD_BASE && fd < VFS_MAX_OPEN_FILES) {
         vfs_open_files[fd] = NULL;
     }
+}
+
+static int vfs_path_is_prefix(const char *path, const char *prefix)
+{
+    if (!path || !prefix) {
+        return 0;
+    }
+
+    size_t prefix_len = strlen(prefix);
+
+    if (prefix_len == 0) {
+        return 0;
+    }
+
+    if (strcmp(prefix, "/") == 0) {
+        return path[0] == '/';
+    }
+
+    if (strncmp(path, prefix, prefix_len) != 0) {
+        return 0;
+    }
+
+    if (path[prefix_len] == '\0' || path[prefix_len] == '/') {
+        return 1;
+    }
+
+    return 0;
+}
+
+static struct vfs_mount *vfs_find_mount_for_path(const char *path)
+{
+    if (!vfs_initialized || !path) {
+        return NULL;
+    }
+
+    struct vfs_mount *best_mount = NULL;
+    size_t best_len = 0;
+
+    for (int i = 0; i < MAX_MOUNTS; i++) {
+        struct vfs_mount *mount = mounts[i];
+        if (!mount) {
+            continue;
+        }
+
+        if (!vfs_path_is_prefix(path, mount->mountpoint)) {
+            continue;
+        }
+
+        size_t mount_len = strlen(mount->mountpoint);
+        if (!best_mount || mount_len > best_len) {
+            best_mount = mount;
+            best_len = mount_len;
+        }
+    }
+
+    if (!best_mount && root_mount && path && path[0] == '/') {
+        best_mount = root_mount;
+    }
+
+    return best_mount;
+}
+
+static const char *vfs_path_within_mount(const struct vfs_mount *mount, const char *path)
+{
+    if (!mount || !path) {
+        return path;
+    }
+
+    if (strcmp(mount->mountpoint, "/") == 0) {
+        return path;
+    }
+
+    size_t mount_len = strlen(mount->mountpoint);
+    if (mount_len == 0) {
+        return path;
+    }
+
+    if (!vfs_path_is_prefix(path, mount->mountpoint)) {
+        return path;
+    }
+
+    if (path[mount_len] == '\0') {
+        return "/";
+    }
+
+    if (path[mount_len] == '/') {
+        return path + mount_len;
+    }
+
+    return path;
 }
 
 static struct ramfs_node *vfs_ramfs_resolve(struct file_system *fs, const char *path)
@@ -379,24 +470,14 @@ int vfs_unmount(const char *mountpoint)
 
 struct file_system *vfs_get_filesystem(const char *path)
 {
-    if (!vfs_initialized || !path) {
-        return NULL;
-    }
-    
-    // For now, simple implementation - just return root filesystem
-    // In a full implementation, this would walk the mount table
-    // and find the longest matching mount point
-    
-    if (root_mount) {
-        return root_mount->fs;
-    }
-    
-    return NULL;
+    struct vfs_mount *mount = vfs_find_mount_for_path(path);
+    return mount ? mount->fs : NULL;
 }
 
 struct file_system *vfs_find_mount(const char *path)
 {
-    return vfs_get_filesystem(path);
+    struct vfs_mount *mount = vfs_find_mount_for_path(path);
+    return mount ? mount->fs : NULL;
 }
 
 char *vfs_resolve_path(const char *path)
@@ -562,48 +643,94 @@ int vfs_open(const char *path, int flags, int mode)
         return VFS_EINVAL;
     }
 
-    struct file_system *fs = vfs_get_filesystem(path);
-    if (!fs) {
+    struct vfs_mount *mount = vfs_find_mount_for_path(path);
+    if (!mount || !mount->fs) {
         return VFS_ENOENT;
     }
 
-    if (fs->type != &ramfs_fs_type) {
-        return VFS_EINVAL;
-    }
+    struct file_system *fs = mount->fs;
+    const char *fs_path = vfs_path_within_mount(mount, path);
+    struct inode *inode = NULL;
 
-    struct ramfs_node *node = vfs_ramfs_resolve(fs, path);
+    if (fs->type == &ramfs_fs_type) {
+        struct ramfs_node *node = vfs_ramfs_resolve(fs, fs_path);
 
-    if (!node) {
-        if (!(flags & VFS_O_CREAT)) {
-            return VFS_ENOENT;
-        }
-
-        if (ramfs_create_file(fs, path, mode ? (uint32_t)mode : 0644) != VFS_SUCCESS) {
-            return VFS_ERROR;
-        }
-
-        node = vfs_ramfs_resolve(fs, path);
         if (!node) {
-            return VFS_ENOENT;
+            if (!(flags & VFS_O_CREAT)) {
+                return VFS_ENOENT;
+            }
+
+            if (ramfs_create_file(fs, fs_path, mode ? (uint32_t)mode : 0644) != VFS_SUCCESS) {
+                return VFS_ERROR;
+            }
+
+            node = vfs_ramfs_resolve(fs, fs_path);
+            if (!node) {
+                return VFS_ENOENT;
+            }
         }
-    }
 
-    if ((node->mode & VFS_FILE_DIRECTORY) && (flags & (VFS_O_WRONLY | VFS_O_RDWR))) {
+        if ((node->mode & VFS_FILE_DIRECTORY) && (flags & (VFS_O_WRONLY | VFS_O_RDWR))) {
+            return VFS_EINVAL;
+        }
+
+        if ((flags & VFS_O_TRUNC) && !(node->mode & VFS_FILE_DIRECTORY)) {
+            vfs_ramfs_truncate_node(node);
+        }
+
+        inode = vfs_create_inode_from_ramfs(fs, node);
+        if (!inode) {
+            return VFS_ENOMEM;
+        }
+    } else if (fs->type == &sfs_fs_type) {
+        struct inode *existing = sfs_resolve_path(fs, fs_path);
+
+        if (!existing) {
+            if (!(flags & VFS_O_CREAT)) {
+                return VFS_ENOENT;
+            }
+
+            int create_result = sfs_create_file(fs, fs_path, mode ? (uint32_t)mode : 0644);
+            if (create_result != VFS_SUCCESS) {
+                return create_result;
+            }
+
+            existing = sfs_resolve_path(fs, fs_path);
+            if (!existing) {
+                return VFS_ENOENT;
+            }
+        } else {
+            if ((flags & VFS_O_CREAT) && (flags & VFS_O_EXCL)) {
+                sfs_put_inode(existing);
+                return VFS_EEXIST;
+            }
+
+            if ((existing->mode & VFS_FILE_DIRECTORY) && (flags & (VFS_O_WRONLY | VFS_O_RDWR))) {
+                sfs_put_inode(existing);
+                return VFS_EINVAL;
+            }
+        }
+
+        if ((flags & VFS_O_TRUNC) && !(existing->mode & VFS_FILE_DIRECTORY)) {
+            int trunc_result = sfs_truncate_file(fs, existing, 0);
+            if (trunc_result != VFS_SUCCESS) {
+                sfs_put_inode(existing);
+                return trunc_result;
+            }
+        }
+
+        inode = existing;
+    } else {
         return VFS_EINVAL;
-    }
-
-    if ((flags & VFS_O_TRUNC) && !(node->mode & VFS_FILE_DIRECTORY)) {
-        vfs_ramfs_truncate_node(node);
-    }
-
-    struct inode *inode = vfs_create_inode_from_ramfs(fs, node);
-    if (!inode) {
-        return VFS_ENOMEM;
     }
 
     struct file *file = kmalloc(sizeof(struct file));
     if (!file) {
-        kfree(inode);
+        if (fs->type == &sfs_fs_type && inode) {
+            sfs_put_inode(inode);
+        } else if (fs->type == &ramfs_fs_type && inode) {
+            kfree(inode);
+        }
         return VFS_ENOMEM;
     }
 
@@ -619,7 +746,11 @@ int vfs_open(const char *path, int flags, int mode)
     if (file->ops && file->ops->open) {
         int open_result = file->ops->open(file, flags, mode);
         if (open_result != VFS_SUCCESS) {
-            kfree(inode);
+            if (fs->type == &sfs_fs_type) {
+                sfs_put_inode(inode);
+            } else if (fs->type == &ramfs_fs_type) {
+                kfree(inode);
+            }
             kfree(file);
             return open_result;
         }
@@ -630,7 +761,11 @@ int vfs_open(const char *path, int flags, int mode)
         if (file->ops && file->ops->close) {
             file->ops->close(file);
         }
-        kfree(inode);
+        if (fs->type == &sfs_fs_type) {
+            sfs_put_inode(inode);
+        } else if (fs->type == &ramfs_fs_type) {
+            kfree(inode);
+        }
         kfree(file);
         return VFS_ENOSPC;
     }
@@ -688,7 +823,11 @@ int vfs_close(int fd)
     }
 
     if (file->inode) {
-        kfree(file->inode);
+        if (file->fs && file->fs->type == &sfs_fs_type) {
+            sfs_put_inode(file->inode);
+        } else {
+            kfree(file->inode);
+        }
     }
 
     kfree(file);
@@ -748,18 +887,19 @@ int vfs_mkdir(const char *path, int mode)
     if (!vfs_initialized || !path) {
         return VFS_EINVAL;
     }
-    
-    // Get filesystem for path
-    struct file_system *fs = vfs_get_filesystem(path);
-    if (!fs) {
+
+    struct vfs_mount *mount = vfs_find_mount_for_path(path);
+    if (!mount || !mount->fs) {
         return VFS_ENOENT;
     }
-    
-    // Call filesystem-specific mkdir
+
+    struct file_system *fs = mount->fs;
+    const char *fs_path = vfs_path_within_mount(mount, path);
+
     if (fs->type->dir_ops && fs->type->dir_ops->mkdir) {
-        return fs->type->dir_ops->mkdir(fs, path, mode);
+        return fs->type->dir_ops->mkdir(fs, fs_path, mode);
     }
-    
+
     return VFS_SUCCESS;
 }
 
@@ -768,18 +908,19 @@ int vfs_rmdir(const char *path)
     if (!vfs_initialized || !path) {
         return VFS_EINVAL;
     }
-    
-    // Get filesystem for path
-    struct file_system *fs = vfs_get_filesystem(path);
-    if (!fs) {
+
+    struct vfs_mount *mount = vfs_find_mount_for_path(path);
+    if (!mount || !mount->fs) {
         return VFS_ENOENT;
     }
-    
-    // Call filesystem-specific rmdir
+
+    struct file_system *fs = mount->fs;
+    const char *fs_path = vfs_path_within_mount(mount, path);
+
     if (fs->type->dir_ops && fs->type->dir_ops->rmdir) {
-        return fs->type->dir_ops->rmdir(fs, path);
+        return fs->type->dir_ops->rmdir(fs, fs_path);
     }
-    
+
     return VFS_SUCCESS;
 }
 
@@ -790,11 +931,7 @@ int vfs_readdir(int fd, struct dirent *entries, size_t count)
         return VFS_EINVAL;
     }
 
-    if (!dir->fs || dir->fs->type != &ramfs_fs_type) {
-        return VFS_EINVAL;
-    }
-
-    if (!dir->fs->type->dir_ops || !dir->fs->type->dir_ops->readdir) {
+    if (!dir->fs || !dir->fs->type->dir_ops || !dir->fs->type->dir_ops->readdir) {
         return VFS_EINVAL;
     }
 
@@ -816,26 +953,35 @@ int vfs_unlink(const char *path)
         return VFS_EINVAL;
     }
 
-    struct file_system *fs = vfs_get_filesystem(path);
-    if (!fs || fs->type != &ramfs_fs_type) {
-        return VFS_EINVAL;
-    }
-
-    struct ramfs_node *node = vfs_ramfs_resolve(fs, path);
-    if (!node) {
+    struct vfs_mount *mount = vfs_find_mount_for_path(path);
+    if (!mount || !mount->fs) {
         return VFS_ENOENT;
     }
 
-    if (node->mode & VFS_FILE_DIRECTORY) {
-        return VFS_EINVAL;
+    struct file_system *fs = mount->fs;
+    const char *fs_path = vfs_path_within_mount(mount, path);
+
+    if (fs->type == &ramfs_fs_type) {
+        struct ramfs_node *node = vfs_ramfs_resolve(fs, fs_path);
+        if (!node) {
+            return VFS_ENOENT;
+        }
+
+        if (node->mode & VFS_FILE_DIRECTORY) {
+            return VFS_EINVAL;
+        }
+
+        struct ramfs_node *parent = node->parent;
+        if (!parent) {
+            return VFS_EPERM;
+        }
+
+        return ramfs_remove_child(parent, node->name);
+    } else if (fs->type == &sfs_fs_type) {
+        return sfs_delete_file(fs, fs_path);
     }
 
-    struct ramfs_node *parent = node->parent;
-    if (!parent) {
-        return VFS_EPERM;
-    }
-
-    return ramfs_remove_child(parent, node->name);
+    return VFS_EINVAL;
 }
 
 int vfs_rename(const char *oldpath, const char *newpath)
@@ -900,28 +1046,54 @@ int vfs_stat(const char *path, struct inode *stat_buf)
         return VFS_EINVAL;
     }
 
-    struct file_system *fs = vfs_get_filesystem(path);
-    if (!fs || fs->type != &ramfs_fs_type) {
-        return VFS_EINVAL;
-    }
-
-    struct ramfs_node *node = vfs_ramfs_resolve(fs, path);
-    if (!node) {
+    struct vfs_mount *mount = vfs_find_mount_for_path(path);
+    if (!mount || !mount->fs) {
         return VFS_ENOENT;
     }
 
-    memset(stat_buf, 0, sizeof(struct inode));
-    stat_buf->ino = node->ino;
-    stat_buf->mode = node->mode;
-    stat_buf->size = node->size;
-    stat_buf->created_time = node->created_time;
-    stat_buf->modified_time = node->modified_time;
-    stat_buf->accessed_time = node->accessed_time;
-    stat_buf->fs = fs;
-    stat_buf->private_data = node;
-    stat_buf->ref_count = 1;
+    struct file_system *fs = mount->fs;
+    const char *fs_path = vfs_path_within_mount(mount, path);
 
-    return VFS_SUCCESS;
+    if (fs->type == &ramfs_fs_type) {
+        struct ramfs_node *node = vfs_ramfs_resolve(fs, fs_path);
+        if (!node) {
+            return VFS_ENOENT;
+        }
+
+        memset(stat_buf, 0, sizeof(struct inode));
+        stat_buf->ino = node->ino;
+        stat_buf->mode = node->mode;
+        stat_buf->size = node->size;
+        stat_buf->created_time = node->created_time;
+        stat_buf->modified_time = node->modified_time;
+        stat_buf->accessed_time = node->accessed_time;
+        stat_buf->fs = fs;
+        stat_buf->private_data = node;
+        stat_buf->ref_count = 1;
+        return VFS_SUCCESS;
+    } else if (fs->type == &sfs_fs_type) {
+        struct inode *inode = sfs_resolve_path(fs, fs_path);
+        if (!inode) {
+            return VFS_ENOENT;
+        }
+
+        memset(stat_buf, 0, sizeof(struct inode));
+        stat_buf->ino = inode->ino;
+        stat_buf->mode = inode->mode;
+        stat_buf->size = inode->size;
+        stat_buf->blocks = inode->blocks;
+        stat_buf->created_time = inode->created_time;
+        stat_buf->modified_time = inode->modified_time;
+        stat_buf->accessed_time = inode->accessed_time;
+        stat_buf->fs = fs;
+        stat_buf->private_data = NULL;
+        stat_buf->ref_count = 1;
+
+        sfs_put_inode(inode);
+        return VFS_SUCCESS;
+    }
+
+    return VFS_EINVAL;
 }
 
 struct inode *vfs_lookup(const char *path)
@@ -930,15 +1102,23 @@ struct inode *vfs_lookup(const char *path)
         return NULL;
     }
 
-    struct file_system *fs = vfs_get_filesystem(path);
-    if (!fs || fs->type != &ramfs_fs_type) {
+    struct vfs_mount *mount = vfs_find_mount_for_path(path);
+    if (!mount || !mount->fs) {
         return NULL;
     }
 
-    struct ramfs_node *node = vfs_ramfs_resolve(fs, path);
-    if (!node) {
-        return NULL;
+    struct file_system *fs = mount->fs;
+    const char *fs_path = vfs_path_within_mount(mount, path);
+
+    if (fs->type == &ramfs_fs_type) {
+        struct ramfs_node *node = vfs_ramfs_resolve(fs, fs_path);
+        if (!node) {
+            return NULL;
+        }
+        return vfs_create_inode_from_ramfs(fs, node);
+    } else if (fs->type == &sfs_fs_type) {
+        return sfs_resolve_path(fs, fs_path);
     }
 
-    return vfs_create_inode_from_ramfs(fs, node);
+    return NULL;
 }
