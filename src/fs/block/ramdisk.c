@@ -112,27 +112,27 @@ struct block_device *ramdisk_create(const char *name, size_t size)
         return NULL;
     }
     
-    early_print("RAM disk: About to memset...\n");
-    // Initialize RAM disk data (zero-fill) - do it safely
+    // Initialize RAM disk data (zero-fill)
     char *ptr = (char *)memory;
     for (size_t i = 0; i < alloc_size; i++) {
         ptr[i] = 0;
     }
-    early_print("RAM disk: memset complete\n");
+    
+    // Compiler barrier to ensure memory initialization completes
+    barrier();
 
     // Setup private data
-    early_print("RAM disk: Setting up private data...\n");
     data->memory = memory;
-    data->size = alloc_size;  // Use actual allocated size
-    data->block_size = BLOCK_SIZE_4096;  // Use 4KB blocks
+    data->size = alloc_size;
+    data->block_size = BLOCK_SIZE_4096;
     data->num_blocks = alloc_size / data->block_size;
-    early_print("RAM disk: Private data configured\n");
+    
+    // Compiler barrier to ensure private data setup completes
+    barrier();
     
     // Setup device structure
-    early_print("RAM disk: Setting up device structure...\n");
     strncpy(dev->name, name, sizeof(dev->name) - 1);
     dev->name[sizeof(dev->name) - 1] = '\0';
-    early_print("RAM disk: Name copied\n");
     
     dev->device_type = BLOCK_DEVICE_RAM;
     dev->block_size = data->block_size;
@@ -141,10 +141,11 @@ struct block_device *ramdisk_create(const char *name, size_t size)
     dev->ops = &ramdisk_ops;
     dev->private_data = data;
     dev->next = NULL;
-    early_print("RAM disk: Device structure configured\n");
+    
+    // Compiler barrier to ensure device structure setup completes
+    barrier();
     
     // Register device
-    early_print("RAM disk: Registering device...\n");
     if (block_device_register(dev) != BLOCK_SUCCESS) {
         early_print("Failed to register RAM disk\n");
         kfree(memory);
@@ -152,7 +153,6 @@ struct block_device *ramdisk_create(const char *name, size_t size)
         kfree(dev);
         return NULL;
     }
-    early_print("RAM disk: Device registered\n");
     
     return dev;
 }
