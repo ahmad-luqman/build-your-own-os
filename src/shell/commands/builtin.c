@@ -7,31 +7,107 @@
 #include "kernel.h"
 #include "vfs.h"
 
+// Helper function to normalize a path (resolve . and ..)
+static void normalize_path(char *dest, size_t dest_size, const char *path)
+{
+    char temp[SHELL_MAX_PATH_LENGTH];
+    char *components[128];  // Pointers to path components
+    int component_count = 0;
+    
+    // Copy path to temp buffer for tokenization
+    strncpy(temp, path, sizeof(temp) - 1);
+    temp[sizeof(temp) - 1] = '\0';
+    
+    // Split path into components and process . and ..
+    char *p = temp;
+    
+    while (*p) {
+        // Skip leading slashes
+        while (*p == '/') {
+            p++;
+        }
+        
+        if (!*p) break;
+        
+        // Find end of component
+        char *start = p;
+        while (*p && *p != '/') {
+            p++;
+        }
+        
+        // Null-terminate component (permanently modify temp buffer)
+        if (*p) {
+            *p = '\0';
+            p++;  // Move to next component
+        }
+        
+        // Process component
+        if (strcmp(start, ".") == 0) {
+            // Current directory - skip
+        } else if (strcmp(start, "..") == 0) {
+            // Parent directory - pop if possible
+            if (component_count > 0) {
+                component_count--;
+            }
+        } else if (*start) {
+            // Regular component - add to list
+            if (component_count < 128) {
+                components[component_count++] = start;
+            }
+        }
+    }
+    
+    // Build normalized path
+    if (component_count == 0) {
+        // Empty path or all .. from root -> root
+        dest[0] = '/';
+        dest[1] = '\0';
+    } else {
+        size_t offset = 0;
+        for (int i = 0; i < component_count && offset < dest_size - 1; i++) {
+            // Add separator
+            dest[offset++] = '/';
+            
+            // Add component
+            const char *comp = components[i];
+            while (*comp && offset < dest_size - 1) {
+                dest[offset++] = *comp++;
+            }
+        }
+        dest[offset] = '\0';
+    }
+}
+
 // Helper function to build full path from current directory and relative path
 static void build_full_path(char *dest, size_t dest_size, const char *current_dir, const char *path)
 {
+    char temp[SHELL_MAX_PATH_LENGTH];
+    
     if (path[0] == '/') {
-        // Absolute path
-        strncpy(dest, path, dest_size - 1);
-        dest[dest_size - 1] = '\0';
+        // Absolute path - normalize it directly
+        normalize_path(dest, dest_size, path);
     } else {
-        // Relative path
+        // Relative path - combine with current directory first
         if (strcmp(current_dir, "/") == 0) {
-            dest[0] = '/';
-            strncpy(dest + 1, path, dest_size - 2);
-            dest[dest_size - 1] = '\0';
+            // Current dir is root
+            temp[0] = '/';
+            strncpy(temp + 1, path, sizeof(temp) - 2);
+            temp[sizeof(temp) - 1] = '\0';
         } else {
-            // Copy current directory
+            // Current dir is not root
             size_t len = strlen(current_dir);
-            if (len < dest_size - 1) {
-                strcpy(dest, current_dir);
-                if (len + 1 < dest_size - 1) {
-                    dest[len] = '/';
-                    strncpy(dest + len + 1, path, dest_size - len - 2);
-                    dest[dest_size - 1] = '\0';
+            if (len < sizeof(temp) - 1) {
+                strcpy(temp, current_dir);
+                if (len + 1 < sizeof(temp) - 1) {
+                    temp[len] = '/';
+                    strncpy(temp + len + 1, path, sizeof(temp) - len - 2);
+                    temp[sizeof(temp) - 1] = '\0';
                 }
             }
         }
+        
+        // Normalize the combined path to resolve . and ..
+        normalize_path(dest, dest_size, temp);
     }
 }
 
