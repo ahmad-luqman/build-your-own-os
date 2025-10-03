@@ -87,9 +87,15 @@ int execute_command(struct shell_context *ctx, struct command_line *cmd)
         return SHELL_EINVAL;
     }
     
+    // Store output redirection in context so commands can access it
+    // Save the original value
+    char *saved_output_redirect = ctx->output_redirect_file;
+    ctx->output_redirect_file = cmd->output_redirect;
+    
     // Set up I/O redirection if specified
     if (setup_io_redirection(cmd) < 0) {
         shell_print_error("Failed to set up I/O redirection\n");
+        ctx->output_redirect_file = saved_output_redirect;
         return SHELL_ERROR;
     }
     
@@ -102,9 +108,13 @@ int execute_command(struct shell_context *ctx, struct command_line *cmd)
         
         if (result == SHELL_ENOENT) {
             shell_printf("Command not found: %s\n", cmd->command);
+            ctx->output_redirect_file = saved_output_redirect;
             return SHELL_ENOENT;
         }
     }
+    
+    // Restore context
+    ctx->output_redirect_file = saved_output_redirect;
     
     return result;
 }

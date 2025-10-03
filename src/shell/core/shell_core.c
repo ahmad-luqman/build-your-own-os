@@ -83,6 +83,9 @@ int shell_init(struct shell_context *ctx)
     ctx->stderr_fd = 2;
     early_print("shell_init: stderr_fd set\n");
     
+    ctx->output_redirect_file = NULL;
+    early_print("shell_init: output_redirect_file set\n");
+    
     // Set directory - try to avoid writing to array directly
     ctx->current_directory[0] = '/';
     early_print("shell_init: directory[0] set\n");

@@ -432,18 +432,10 @@ int cmd_echo(struct shell_context *ctx, int argc, char *argv[])
         return SHELL_EINVAL;
     }
     
-    // Check for output redirection (>)
-    int redirect_index = -1;
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], ">") == 0) {
-            redirect_index = i;
-            break;
-        }
-    }
-    
-    if (redirect_index > 0 && redirect_index < argc - 1) {
+    // Check if output redirection is active (set by parser)
+    if (ctx->output_redirect_file) {
         // Output redirection: echo text > file
-        const char *filename = argv[redirect_index + 1];
+        const char *filename = ctx->output_redirect_file;
         
         // Build full path
         char full_path[SHELL_MAX_PATH_LENGTH];
@@ -458,10 +450,10 @@ int cmd_echo(struct shell_context *ctx, int argc, char *argv[])
             return SHELL_ERROR;
         }
         
-        // Build output string
+        // Build output string from all arguments
         char buffer[1024];
         size_t pos = 0;
-        for (int i = 1; i < redirect_index; i++) {
+        for (int i = 1; i < argc; i++) {
             if (i > 1 && pos < sizeof(buffer) - 1) {
                 buffer[pos++] = ' ';
             }
