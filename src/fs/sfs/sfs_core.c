@@ -6,6 +6,22 @@
 #include "sfs.h"
 #include "memory.h"
 #include "kernel.h"
+#include <string.h>
+
+// Helper functions to prevent GCC SIMD vectorization bugs
+static inline void sfs_sync_inode_data_safe(struct sfs_inode *disk_inode, const struct inode *inode)
+    __attribute__((always_inline, nonnull));
+static inline void sfs_sync_inode_data_safe(struct sfs_inode *disk_inode, const struct inode *inode) {
+    __asm__ volatile("dmb ish" ::: "memory");
+    disk_inode->size = inode->size;
+    __asm__ volatile("dmb ish" ::: "memory");
+    disk_inode->blocks = inode->blocks;
+    __asm__ volatile("dmb ish" ::: "memory");
+    disk_inode->modified_time = inode->modified_time;
+    __asm__ volatile("dmb ish" ::: "memory");
+    disk_inode->accessed_time = inode->accessed_time;
+    __asm__ volatile("dmb ish" ::: "memory");
+}
 
 // SFS file operations
 static int sfs_file_open(struct file *file, int flags, int mode);
@@ -858,7 +874,10 @@ struct inode *sfs_alloc_inode(struct file_system *fs, uint32_t mode)
             }
             new_inode.indirect = 0;
 
+            // Add memory barrier to prevent GCC vectorization from causing stack corruption
+            __asm__ volatile("dmb ish" ::: "memory");
             inodes[entry] = new_inode;
+            __asm__ volatile("dmb ish" ::: "memory");
 
             if (sfs_write_block(fs, block_num, buffer) != VFS_SUCCESS) {
                 goto out;
@@ -909,10 +928,8 @@ int sfs_sync_inode(struct inode *inode)
         return VFS_SUCCESS;
     }
 
-    inode_data->disk_inode.size = inode->size;
-    inode_data->disk_inode.blocks = inode->blocks;
-    inode_data->disk_inode.modified_time = inode->modified_time;
-    inode_data->disk_inode.accessed_time = inode->accessed_time;
+    // Use helper function to prevent GCC SIMD vectorization
+    sfs_sync_inode_data_safe(&inode_data->disk_inode, inode);
 
     int result = sfs_write_inode_raw(inode->fs, inode_data->inode_num, &inode_data->disk_inode);
     if (result == VFS_SUCCESS) {
