@@ -8,6 +8,11 @@
 #include "kernel.h"
 #include <string.h>
 
+// Disable optimizations for this entire file to prevent SIMD generation
+#pragma GCC push_options
+#pragma GCC optimize ("-O0")
+#pragma GCC target ("general-regs-only")
+
 // Helper functions to prevent GCC SIMD vectorization bugs
 static inline void sfs_sync_inode_data_safe(struct sfs_inode *disk_inode, const struct inode *inode)
     __attribute__((always_inline, nonnull));
@@ -724,9 +729,35 @@ static struct inode *sfs_allocate_vfs_inode(struct file_system *fs, uint32_t ino
     inode->private_data = inode_data;
     inode->ref_count = 1;
 
-    // Copy inode data with barrier before and after
+    // Copy inode data field-by-field to prevent SIMD generation
     __asm__ volatile("dmb ish" ::: "memory");
-    memcpy(&inode_data->disk_inode, disk_inode, sizeof(struct sfs_inode));
+    inode_data->disk_inode.mode = disk_inode->mode;
+    __asm__ volatile("dmb ish" ::: "memory");
+    inode_data->disk_inode.size = disk_inode->size;
+    __asm__ volatile("dmb ish" ::: "memory");
+    inode_data->disk_inode.blocks = disk_inode->blocks;
+    __asm__ volatile("dmb ish" ::: "memory");
+    for (int i = 0; i < SFS_DIRECT_BLOCKS; i++) {
+        inode_data->disk_inode.direct[i] = disk_inode->direct[i];
+    }
+    __asm__ volatile("dmb ish" ::: "memory");
+    inode_data->disk_inode.indirect = disk_inode->indirect;
+    __asm__ volatile("dmb ish" ::: "memory");
+    inode_data->disk_inode.created_time = disk_inode->created_time;
+    __asm__ volatile("dmb ish" ::: "memory");
+    inode_data->disk_inode.modified_time = disk_inode->modified_time;
+    __asm__ volatile("dmb ish" ::: "memory");
+    inode_data->disk_inode.accessed_time = disk_inode->accessed_time;
+    __asm__ volatile("dmb ish" ::: "memory");
+    inode_data->disk_inode.links = disk_inode->links;
+    __asm__ volatile("dmb ish" ::: "memory");
+    inode_data->disk_inode.flags = disk_inode->flags;
+    __asm__ volatile("dmb ish" ::: "memory");
+    // Copy reserved field byte-by-byte
+    for (size_t i = 0; i < sizeof(disk_inode->reserved); i++) {
+        inode_data->disk_inode.reserved[i] = disk_inode->reserved[i];
+    }
+    __asm__ volatile("dmb ish" ::: "memory");
     inode_data->inode_num = inode_num;
     inode_data->dirty = 0;
     __asm__ volatile("dmb ish" ::: "memory");
