@@ -17,10 +17,15 @@ Quick action items organized by priority and timeframe.
 
 - [ ] **Fix SFS file creation crash** - 🔴 CRITICAL
   - Issue: Crash during file creation commands (`echo "text" > file`, `touch`)
-  - Same stack corruption pattern as directory crash
+  - Same stack corruption pattern as directory crash (SP: 0x4009AF68)
   - Location: Likely in `sfs_file_create()` or file write path
-  - Next step: Add memory barriers to all SFS file operations
-  - Details: See `docs/development/SFS_NEXT_STEPS.md`
+  - Root cause: Same compiler optimization issue causing unsafe structure assignments
+  - Action Plan:
+    1. Add debug output to `sfs_file_create()`, `sfs_file_write()`, `sfs_alloc_block()`
+    2. Add ARM64 memory barriers (dmb ish) around critical operations
+    3. Replace unsafe structure assignments with memcpy
+    4. Test with -O0 to confirm optimization-related issue
+  - Details: See `docs/development/SFS_NEXT_STEPS.md` for full roadmap
 
 - [x] **Fix output redirection** - ✅ FIXED (Oct 3, 2025)
   - Files modified: `src/include/shell.h`, `src/shell/core/shell_core.c`, `src/shell/parser/parser.c`, `src/shell/commands/builtin.c`
@@ -64,6 +69,8 @@ Quick action items organized by priority and timeframe.
 
 ### File System
 - [ ] Complete **SFS testing** with block devices _(unblocked 2025-10-03: `mkfs`/`mkdir` crash fixed by enabling FP/SIMD; see `tmp/SFS_ISSUES_FOUND.md`)_
+  - Directory operations now work (`cd /sfs`)
+  - Next: Fix file creation crash, then complete full testing suite
 - [ ] Add **symbolic links** support
 - [ ] Add **file permissions** checking
 - [ ] Implement **chmod** command
@@ -204,15 +211,16 @@ Quick action items organized by priority and timeframe.
 ## 📋 QUICK ACTION CHECKLIST
 
 ### Today
-- [ ] Fix echo redirection bug
-- [ ] Test all file commands
-- [ ] Update test scripts
+- [ ] Fix SFS file creation crash
+- [ ] Add memory barriers to SFS file operations
+- [ ] Test file creation commands after fix
 
 ### This Week
-- [ ] Fix block device issues
+- [ ] Fix SFS file creation crash
+- [ ] Complete basic SFS operations (read, write, delete)
 - [ ] Implement append redirection
 - [ ] Add better error messages
-- [ ] Write more tests
+- [ ] Write SFS-specific tests
 
 ### This Month
 - [ ] Complete shell I/O redirection
