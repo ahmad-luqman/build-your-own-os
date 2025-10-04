@@ -7,6 +7,10 @@ Quick action items organized by priority and timeframe.
 ## 🔴 URGENT (Fix This Week)
 
 ### Critical Bugs
+- [ ] **Investigate SFS mount page fault** - 🚨 NEW (Oct 5, 2025)
+  - Reproduce: `mkdir /sfs`, `mkfs ramdisk0`, `mount ramdisk0 /sfs sfs`, `cd /sfs`
+  - Result: Immediate ARM64 page fault (PC: 0x4009AF68, FAR: 0x401FFA4C)
+  - Notes: Occurs after successful SFS format/mount; RAMFS operations still stable
 - [x] **Fix SFS stack corruption crash** - ✅ FIXED (Oct 4, 2025)
   - Files modified: `src/arch/arm64/interrupts/vectors.S`, `src/fs/sfs/sfs_core.c`, `src/kernel/exceptions.c`
   - Issue: Stack corruption during directory operations (`cd /sfs`) - SP corrupted to 0x4009AF68
@@ -69,8 +73,8 @@ Quick action items organized by priority and timeframe.
 
 ### File System
 - [ ] Complete **SFS testing** with block devices _(unblocked 2025-10-03: `mkfs`/`mkdir` crash fixed by enabling FP/SIMD; see `tmp/SFS_ISSUES_FOUND.md`)_
-  - Directory operations now work (`cd /sfs`)
-  - Next: Fix file creation crash, then complete full testing suite
+  - Directory operations currently failing: `cd /sfs` after mount page faults (see Bug #5)
+  - Next: Diagnose mount-time inode handling before resuming full test suite
 - [ ] Add **symbolic links** support
 - [ ] Add **file permissions** checking
 - [ ] Implement **chmod** command
@@ -156,8 +160,8 @@ Quick action items organized by priority and timeframe.
 ## ✅ RECENTLY COMPLETED
 
 ### October 2025
-- ✅ **Fixed SFS stack corruption crash** - Directory operations now work!
-  - Issue: `cd /sfs` caused stack corruption (SP: 0x4009AF68) and system crash
+- ⚠️ **SFS stack corruption fix needs follow-up** - New mount scenario still faults
+  - Issue: `cd /sfs` caused stack corruption (SP: 0x4009AF68) and system crash; regression observed after fresh SFS mount (Bug #5)
   - Root cause: GCC -O2 optimization generating SIMD instructions for structure copying
   - Solution:
     - Fixed kmalloc to return 16-byte aligned addresses
@@ -255,25 +259,28 @@ Quick action items organized by priority and timeframe.
 | 2 | ✅ Fixed | Block Device | Registration crashes | ✅ FIXED (Oct 2025) |
 | 3 | ✅ Fixed | VFS | Relative paths fail | ✅ FIXED (Oct 2025) |
 | 4 | ✅ Fixed | SFS | SIMD vectorization crash (PC: 0x600003C5) | ✅ FIXED (Oct 2025) |
-| 5 | 🟡 High | SFS | System hangs at RAM disk creation | Investigating |
-| 6 | 🟢 Medium | Shell | Directory navigation edge cases | Testing |
-| 7 | 🟢 Medium | Shell | Limited command history | Workaround exists |
-| 8 | 🟢 Medium | Various | Error messages unclear | Gradual improvement |
-| 9 | ⚪ Low | RAMFS | Timestamps not maintained | By design |
-| 10 | ⚪ Low | File Systems | File size limited | By design |
+| 5 | 🔴 Critical | SFS | Page fault after mounting SFS then `cd /sfs` | Investigating |
+| 6 | 🟡 High | SFS | System hangs at RAM disk creation | Investigating |
+| 7 | 🟢 Medium | Shell | Directory navigation edge cases | Testing |
+| 8 | 🟢 Medium | Shell | Limited command history | Workaround exists |
+| 9 | 🟢 Medium | Various | Error messages unclear | Gradual improvement |
+| 10 | ⚪ Low | RAMFS | Timestamps not maintained | By design |
+| 11 | ⚪ Low | File Systems | File size limited | By design |
 
 ### Open Bugs
 
 | ID | Priority | Component | Description | Status |
 |----|----------|-----------|-------------|--------|
-| 6 | 🟢 Medium | Shell | Directory navigation edge cases | Testing |
-| 7 | 🟢 Medium | Shell | Limited command history | Workaround exists |
-| 8 | 🟢 Medium | Various | Error messages unclear | Gradual improvement |
-| 9 | ⚪ Low | RAMFS | Timestamps not maintained | By design |
-| 10 | ⚪ Low | File Systems | File size limited | By design |
+| 5 | 🔴 Critical | SFS | Page fault after mounting SFS then `cd /sfs` | Investigating |
+| 6 | 🟡 High | SFS | System hangs at RAM disk creation | Investigating |
+| 7 | 🟢 Medium | Shell | Directory navigation edge cases | Testing |
+| 8 | 🟢 Medium | Shell | Limited command history | Workaround exists |
+| 9 | 🟢 Medium | Various | Error messages unclear | Gradual improvement |
+| 10 | ⚪ Low | RAMFS | Timestamps not maintained | By design |
+| 11 | ⚪ Low | File Systems | File size limited | By design |
 
 ### Recently Fixed
-- ✅ SFS stack corruption crash - `cd /sfs` now works without crashing
+- ⚠️ SFS stack corruption crash fix regressed - `cd /sfs` after fresh SFS mount still faults (see Bug #5)
 - ✅ RAM disk creation hang - 4MB RAM disk now creates successfully (1024 blocks)
 - ✅ Relative path handling (Bug #3) - `./file.txt` and `../file.txt` work correctly
 - ✅ Output redirection (Bug #1) - `echo text > file` works correctly

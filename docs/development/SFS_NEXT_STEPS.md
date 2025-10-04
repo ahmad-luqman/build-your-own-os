@@ -9,11 +9,12 @@
 - [x] Exception handling reports accurate PC/SP values
 - [x] System boots through file system initialization
 - [x] Comprehensive test infrastructure created
+- [x] RAMFS basic file operations validated (`touch`, `echo`, `cat`, `mkdir`, `ls`, `pwd`)
 
 ### ❌ Critical Issues Remaining
 - [x] System hangs at RAM disk creation (during SFS initialization) - ✅ FIXED
 - [x] RAM disk allocation issue (size calculation) - ✅ FIXED
-- [x] Directory traversal now works (no longer crashes after `cd /sfs`)
+- [ ] Directory traversal stable after SFS mount (regression observed Oct 5, 2025)
 - [x] SIMD vectorization crash fixed
 
 ## Immediate Priority (Next 1-2 days)
@@ -30,16 +31,38 @@
 
 **Files Modified**: `src/fs/block/ramdisk.c`
 
-### 2. Resume File Operations Testing
-**Status**: ✅ READY - RAM disk creation is now working
-**Next Steps**:
+### 2. Investigate SFS Directory Traversal Crash - 🚨 NEW (Oct 5, 2025)
+**Status**: ❌ Reproduced - page fault triggered immediately after mounting SFS
+**Repro Steps**:
+```bash
+mkdir /sfs
+mkfs ramdisk0
+mount ramdisk0 /sfs sfs
+cd /sfs
+```
+**Observed**:
+- ARM64 page fault (`PC=0x4009AF68`, `FAR=0x401FFA4C`, `ESR=0x96000021`) leading to kernel halt
+- See `tmp/sfs_mount_shell_sequence.log` for full trace
+- Crash happens even though SFS mount reports success; RAMFS operations remain stable
+**Hypothesis**:
+- Directory lookup/`vfs_stat` for `/sfs` returning corrupted inode or invalid pointer
+- Possible regression from recent memcpy/barrier changes in `sfs_core.c`
+**Immediate Actions**:
+1. Add targeted logging or asserts in `sfs_core.c` path resolution (`sfs_lookup`, `sfs_dir_read`) to capture inode state
+2. Validate mountpoint root inode setup after `sfs_mount`
+3. Review stack usage around `cmd_cd`/`vfs_stat` interaction for newly mounted filesystems
+4. Consider temporarily disabling aggressive compiler optimizations (`-O0`) to confirm if optimization-sensitive
+
+### 3. Resume File Operations Testing (Blocked by #2)
+**Status**: ⏸ Blocked - await resolution of directory traversal crash
+**Next Steps (once unblocked)**:
 1. Test file creation commands (`echo "text" > file`, `touch`)
 2. Verify SFS file operations work correctly with 4MB RAM disk
 3. Test `cat` command for file reading
 4. Test file persistence across mount/unmount
 5. Complete basic file operations (read, write, delete)
 
-### 3. Complete Basic File Operations
+### 4. Complete Basic File Operations
 **Files to investigate**:
 - `src/fs/sfs/sfs_core.c`:
   - `sfs_file_create()`
