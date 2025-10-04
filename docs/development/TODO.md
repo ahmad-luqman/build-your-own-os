@@ -7,14 +7,29 @@ Quick action items organized by priority and timeframe.
 ## 🔴 URGENT (Fix This Week)
 
 ### Critical Bugs
-- [x] **Fix output redirection** - ✅ FIXED (Jan 3, 2025)
+- [x] **Fix SFS stack corruption crash** - ✅ FIXED (Oct 4, 2025)
+  - Files modified: `src/arch/arm64/interrupts/vectors.S`, `src/fs/sfs/sfs_core.c`, `src/kernel/exceptions.c`
+  - Issue: Stack corruption during directory operations (`cd /sfs`) - SP corrupted to 0x4009AF68
+  - Root cause: Compiler optimization (-O2) causing unsafe structure assignments
+  - Solution: Added dedicated exception stack (0x40300000), ARM64 memory barriers (dmb ish), and replaced struct assignment with memcpy
+  - Testing: ✅ VERIFIED in QEMU - `cd /sfs` works correctly
+  - Details: See `docs/development/SFS_STACK_CORRUPTION_INVESTIGATION.md`
+
+- [ ] **Fix SFS file creation crash** - 🔴 CRITICAL
+  - Issue: Crash during file creation commands (`echo "text" > file`, `touch`)
+  - Same stack corruption pattern as directory crash
+  - Location: Likely in `sfs_file_create()` or file write path
+  - Next step: Add memory barriers to all SFS file operations
+  - Details: See `docs/development/SFS_NEXT_STEPS.md`
+
+- [x] **Fix output redirection** - ✅ FIXED (Oct 3, 2025)
   - Files modified: `src/include/shell.h`, `src/shell/core/shell_core.c`, `src/shell/parser/parser.c`, `src/shell/commands/builtin.c`
   - Solution: Added `output_redirect_file` to shell_context for parser-command communication
   - Testing: ✅ VERIFIED in QEMU - `echo Hello > file.txt` works correctly
   - Test results: File created successfully, no console output during redirection, cat shows correct content
   - Test log: `tmp/bug_test_full_output.log`
   
-- [x] **Fix block device registration** - ✅ FIXED (Jan 3, 2025)
+- [x] **Fix block device registration** - ✅ FIXED (Oct 3, 2025)
   - Files modified: `src/fs/block/block_device.c`, `src/fs/block/ramdisk.c`, `src/kernel/main.c`
   - Issue: Compiler optimization causing crash during struct initialization
   - Solution: Added strategic early_print() calls to act as compiler barriers
@@ -134,6 +149,15 @@ Quick action items organized by priority and timeframe.
 ## ✅ RECENTLY COMPLETED
 
 ### October 2025
+- ✅ **Fixed SFS stack corruption crash** - Directory operations now work!
+  - Issue: `cd /sfs` caused stack corruption (SP: 0x4009AF68) and system crash
+  - Root cause: Compiler optimization (-O2) causing unsafe structure assignments in `sfs_allocate_vfs_inode()`
+  - Solution: Added dedicated exception stack, ARM64 memory barriers, and replaced struct assignment with memcpy
+  - Files modified: `src/arch/arm64/interrupts/vectors.S`, `src/fs/sfs/sfs_core.c`, `src/kernel/exceptions.c`
+  - Created documentation: `docs/development/SFS_STACK_CORRUPTION_INVESTIGATION.md`, `docs/development/SFS_NEXT_STEPS.md`
+  - Testing: ✅ VERIFIED - `cd /sfs` works correctly without crashes
+  - Next: File creation still crashes with same pattern (high priority)
+
 - ✅ **Fixed relative path handling (Bug #3)** - Paths with `.` and `..` now work!
   - Added `normalize_path()` function to properly resolve path components
   - All commands now support: `./file.txt`, `../file.txt`, `./sub/../file.txt`
@@ -142,14 +166,14 @@ Quick action items organized by priority and timeframe.
   - Files: `tmp/BUG3_README.md`, `tmp/BUG3_COMPLETE_SUMMARY.txt`
   - Test logs: `tmp/BUG3_BASELINE_RESULTS.log`, `tmp/bug3_postfix_auto_20251003_142854.log`
 
-### January 2025
+### October 2025
 - ✅ **Fixed output redirection bug (Bug #1)** - `echo text > file` now works correctly
   - Parser and echo command now properly communicate via shell_context
   - Added automated testing in QEMU with ARM64
   - Files written correctly, no console output when redirected
   - Verified with test script: `tmp/test_bug_fixes.sh`
   - Full test output: `tmp/bug_test_full_output.log`
-  
+
 - ✅ **Fixed block device registration crash (Bug #2)** - RAM disk now works!
   - Root cause: Compiler optimization issue during struct initialization
   - Solution: Added strategic early_print() calls as compiler barriers
@@ -206,20 +230,33 @@ Quick action items organized by priority and timeframe.
 
 ## 🐛 BUG TRACKER
 
+### Bug Tracker (All Bugs)
+
+| ID | Priority | Component | Description | Status |
+|----|----------|-----------|-------------|--------|
+| 1 | ✅ Fixed | Shell | Output redirection broken | ✅ FIXED (Oct 2025) |
+| 2 | ✅ Fixed | Block Device | Registration crashes | ✅ FIXED (Oct 2025) |
+| 3 | ✅ Fixed | VFS | Relative paths fail | ✅ FIXED (Oct 2025) |
+| 4 | 🔴 Critical | SFS | File creation crashes after directory traversal | Investigating |
+| 5 | 🟡 High | Shell | Directory navigation edge cases | Testing |
+| 6 | 🟢 Medium | Shell | Limited command history | Workaround exists |
+| 7 | 🟢 Medium | Various | Error messages unclear | Gradual improvement |
+| 8 | ⚪ Low | RAMFS | Timestamps not maintained | By design |
+| 9 | ⚪ Low | File Systems | File size limited | By design |
+
 ### Open Bugs
 
 | ID | Priority | Component | Description | Status |
 |----|----------|-----------|-------------|--------|
-| 1 | 🔴 Critical | Shell | Output redirection broken | ✅ FIXED (Jan 2025) |
-| 2 | 🔴 Critical | Block Device | Registration crashes | ✅ FIXED (Jan 2025) |
-| 3 | 🟡 High | VFS | Relative paths fail | ✅ FIXED (Oct 2025) |
-| 4 | 🟡 High | Shell | Directory navigation edge cases | Testing |
-| 5 | 🟢 Medium | Shell | Limited command history | Workaround exists |
-| 6 | 🟢 Medium | Various | Error messages unclear | Gradual improvement |
-| 7 | ⚪ Low | RAMFS | Timestamps not maintained | By design |
-| 8 | ⚪ Low | File Systems | File size limited | By design |
+| 4 | 🔴 Critical | SFS | File creation crashes after directory traversal | Investigating |
+| 5 | 🟡 High | Shell | Directory navigation edge cases | Testing |
+| 6 | 🟢 Medium | Shell | Limited command history | Workaround exists |
+| 7 | 🟢 Medium | Various | Error messages unclear | Gradual improvement |
+| 8 | ⚪ Low | RAMFS | Timestamps not maintained | By design |
+| 9 | ⚪ Low | File Systems | File size limited | By design |
 
 ### Recently Fixed
+- ✅ SFS stack corruption crash - `cd /sfs` now works without crashing
 - ✅ Relative path handling (Bug #3) - `./file.txt` and `../file.txt` work correctly
 - ✅ Output redirection (Bug #1) - `echo text > file` works correctly
 - ✅ Block device registration (Bug #2) - RAM disk successfully registers
@@ -306,11 +343,11 @@ Tutorials:      ██████░░░░░░░░░░░░░░  30
 
 ---
 
-**Last Updated**: October 3, 2025  
-**Next Review**: End of week  
+**Last Updated**: October 4, 2025
+**Next Review**: End of week
 **Owner**: MiniOS Development Team
 
-**Recent Achievement**: 🎉 All 3 critical bugs (output redirection, block device registration, relative path handling) are now FIXED!
+**Recent Achievement**: 🎉 Fixed critical SFS stack corruption crash! Directory operations (`cd /sfs`) now work. Next: Fix file creation crash.
 
 ---
 
