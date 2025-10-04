@@ -102,22 +102,16 @@ struct block_device *ramdisk_create(const char *name, size_t size)
         return NULL;
     }
 
-    // Allocate RAM disk memory - use kmalloc for smaller size
-    size_t alloc_size = size > 32*1024 ? 32*1024 : size;  // Cap at 32KB for kmalloc
-    void *memory = kmalloc(alloc_size);
+    // Allocate RAM disk memory - use memory_alloc for larger allocations
+    size_t alloc_size = size;
+    void *memory = memory_alloc(alloc_size, MEMORY_ALIGN_4K);
     if (!memory) {
         early_print("Failed to allocate RAM disk memory\n");
         kfree(data);
         kfree(dev);
         return NULL;
     }
-    
-    // Initialize RAM disk data (zero-fill)
-    char *ptr = (char *)memory;
-    for (size_t i = 0; i < alloc_size; i++) {
-        ptr[i] = 0;
-    }
-    
+  
     // Compiler barrier to ensure memory initialization completes
     barrier();
 
@@ -126,14 +120,14 @@ struct block_device *ramdisk_create(const char *name, size_t size)
     data->size = alloc_size;
     data->block_size = BLOCK_SIZE_4096;
     data->num_blocks = alloc_size / data->block_size;
-    
+
     // Compiler barrier to ensure private data setup completes
     barrier();
-    
+
     // Setup device structure
     strncpy(dev->name, name, sizeof(dev->name) - 1);
     dev->name[sizeof(dev->name) - 1] = '\0';
-    
+
     dev->device_type = BLOCK_DEVICE_RAM;
     dev->block_size = data->block_size;
     dev->num_blocks = data->num_blocks;
@@ -141,14 +135,13 @@ struct block_device *ramdisk_create(const char *name, size_t size)
     dev->ops = &ramdisk_ops;
     dev->private_data = data;
     dev->next = NULL;
-    
+
     // Compiler barrier to ensure device structure setup completes
     barrier();
-    
     // Register device
     if (block_device_register(dev) != BLOCK_SUCCESS) {
         early_print("Failed to register RAM disk\n");
-        kfree(memory);
+        memory_free(memory);
         kfree(data);
         kfree(dev);
         return NULL;
@@ -168,11 +161,11 @@ void ramdisk_destroy(struct block_device *dev)
         if (data->memory) {
             memory_free(data->memory);
         }
-        memory_free(data);
+        kfree(data);
     }
 
     // Note: Should also unregister from device manager
-    memory_free(dev);
+    kfree(dev);
 }
 
 static int ramdisk_read_block(struct block_device *dev, uint32_t block_num, void *buffer)
