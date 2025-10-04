@@ -12,7 +12,7 @@
 ### ❌ Critical Issues Remaining
 - [ ] File creation crashes (`echo > file`, `touch`)
 - [ ] File write operations are unstable
-- [ ] System crashes after directory traversal
+- [x] Directory traversal now works (no longer crashes after `cd /sfs`)
 
 ## Immediate Priority (Next 1-2 days)
 
@@ -29,6 +29,9 @@
 2. Check for structure assignments needing memory barriers
 3. Verify block allocation code
 4. Test with -O0 to confirm optimization-related issue
+5. Add ARM64 memory barriers (dmb ish) around critical operations
+6. Replace unsafe structure assignments with memcpy
+7. Test incrementally with each fix
 
 ### 2. Complete Basic File Operations
 **Files to investigate**:
