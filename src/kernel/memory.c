@@ -166,11 +166,20 @@ void memory_show_layout(struct boot_info *boot_info)
 
 #define KMALLOC_ALIGNMENT 16
 
-static uint8_t simple_heap[256 * 1024] __attribute__((aligned(KMALLOC_ALIGNMENT)));  // 256KB static heap
+// Increase heap size to 2MB to handle file system operations
+static uint8_t simple_heap[2 * 1024 * 1024] __attribute__((aligned(KMALLOC_ALIGNMENT)));  // 2MB static heap
 static size_t heap_offset = 0;
 
+// Simple memory statistics
+static struct {
+    size_t total_allocations;
+    size_t total_bytes_allocated;
+    size_t peak_usage;
+    size_t current_usage;
+} kmalloc_stats = {0};
+
 void *kmalloc(size_t size) {
-    // Simple bump allocator
+    // Simple bump allocator with better tracking
     if (size == 0) return NULL;
 
     // Align requested size and heap pointer so we can safely satisfy
@@ -179,12 +188,52 @@ void *kmalloc(size_t size) {
     size_t aligned_offset = (heap_offset + (KMALLOC_ALIGNMENT - 1)) & ~(size_t)(KMALLOC_ALIGNMENT - 1);
 
     if (aligned_offset + size > sizeof(simple_heap)) {
-        early_print("kmalloc: OUT OF MEMORY\n");
+        early_print("kmalloc: OUT OF MEMORY - ");
+        // Print usage statistics for debugging
+        early_print("requested=");
+        char size_buf[16];
+        int len = 0;
+        size_t temp = size;
+        do {
+            size_buf[len++] = '0' + (temp % 10);
+            temp /= 10;
+        } while (temp > 0 && len < 15);
+        size_buf[len] = 0;
+        // Reverse the string
+        for (int i = 0; i < len/2; i++) {
+            char c = size_buf[i];
+            size_buf[i] = size_buf[len-1-i];
+            size_buf[len-1-i] = c;
+        }
+        early_print(size_buf);
+        early_print(" used=");
+        temp = aligned_offset;
+        len = 0;
+        do {
+            size_buf[len++] = '0' + (temp % 10);
+            temp /= 10;
+        } while (temp > 0 && len < 15);
+        size_buf[len] = 0;
+        for (int i = 0; i < len/2; i++) {
+            char c = size_buf[i];
+            size_buf[i] = size_buf[len-1-i];
+            size_buf[len-1-i] = c;
+        }
+        early_print(size_buf);
+        early_print(" total=2MB\n");
         return NULL;  // Out of memory
     }
 
     void *ptr = &simple_heap[aligned_offset];
     heap_offset = aligned_offset + size;
+
+    // Update statistics
+    kmalloc_stats.total_allocations++;
+    kmalloc_stats.total_bytes_allocated += size;
+    kmalloc_stats.current_usage = aligned_offset + size;
+    if (kmalloc_stats.current_usage > kmalloc_stats.peak_usage) {
+        kmalloc_stats.peak_usage = kmalloc_stats.current_usage;
+    }
 
     // Debug output with address (simplified)
     early_print("kmalloc: OK\n");
@@ -203,4 +252,76 @@ void kfree(void *ptr) {
  */
 int memory_allocator_is_ready(void) {
     return memory_initialized;
+}
+
+/**
+ * Get memory allocation statistics for debugging
+ */
+void memory_get_alloc_stats(void) {
+    early_print("=== Memory Allocation Statistics ===\n");
+    early_print("Total allocations: ");
+    // Simple number printing (avoiding printf dependencies)
+    size_t num = kmalloc_stats.total_allocations;
+    if (num == 0) {
+        early_print("0");
+    } else {
+        char buf[16];
+        int len = 0;
+        while (num > 0 && len < 15) {
+            buf[len++] = '0' + (num % 10);
+            num /= 10;
+        }
+        buf[len] = 0;
+        // Reverse
+        for (int i = 0; i < len/2; i++) {
+            char c = buf[i];
+            buf[i] = buf[len-1-i];
+            buf[len-1-i] = c;
+        }
+        early_print(buf);
+    }
+    early_print("\n");
+    
+    early_print("Current usage: ");
+    num = kmalloc_stats.current_usage;
+    if (num == 0) {
+        early_print("0");
+    } else {
+        char buf[16];
+        int len = 0;
+        while (num > 0 && len < 15) {
+            buf[len++] = '0' + (num % 10);
+            num /= 10;
+        }
+        buf[len] = 0;
+        for (int i = 0; i < len/2; i++) {
+            char c = buf[i];
+            buf[i] = buf[len-1-i];
+            buf[len-1-i] = c;
+        }
+        early_print(buf);
+    }
+    early_print(" bytes\n");
+    
+    early_print("Peak usage: ");
+    num = kmalloc_stats.peak_usage;
+    if (num == 0) {
+        early_print("0");
+    } else {
+        char buf[16];
+        int len = 0;
+        while (num > 0 && len < 15) {
+            buf[len++] = '0' + (num % 10);
+            num /= 10;
+        }
+        buf[len] = 0;
+        for (int i = 0; i < len/2; i++) {
+            char c = buf[i];
+            buf[i] = buf[len-1-i];
+            buf[len-1-i] = c;
+        }
+        early_print(buf);
+    }
+    early_print(" bytes\n");
+    early_print("===================================\n");
 }

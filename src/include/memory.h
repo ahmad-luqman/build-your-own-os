@@ -136,6 +136,11 @@ void memory_show_layout(struct boot_info *boot_info);
  */
 int memory_allocator_is_ready(void);
 
+/**
+ * Get memory allocation statistics for debugging
+ */
+void memory_get_alloc_stats(void);
+
 // Architecture-specific functions (implemented per architecture)
 
 /**
