@@ -158,12 +158,21 @@ Quick action items organized by priority and timeframe.
 ### October 2025
 - ✅ **Fixed SFS stack corruption crash** - Directory operations now work!
   - Issue: `cd /sfs` caused stack corruption (SP: 0x4009AF68) and system crash
-  - Root cause: Compiler optimization (-O2) causing unsafe structure assignments in `sfs_allocate_vfs_inode()`
-  - Solution: Added dedicated exception stack, ARM64 memory barriers, and replaced struct assignment with memcpy
-  - Files modified: `src/arch/arm64/interrupts/vectors.S`, `src/fs/sfs/sfs_core.c`, `src/kernel/exceptions.c`
-  - Created documentation: `docs/development/SFS_STACK_CORRUPTION_INVESTIGATION.md`, `docs/development/SFS_NEXT_STEPS.md`
-  - Testing: ✅ VERIFIED - `cd /sfs` works correctly without crashes
-  - Next: File creation still crashes with same pattern (high priority)
+  - Root cause: GCC -O2 optimization generating SIMD instructions for structure copying
+  - Solution:
+    - Fixed kmalloc to return 16-byte aligned addresses
+    - Added anti-vectorization flags to prevent SIMD generation
+    - Exception handling now reports accurate PC/SP values
+  - Files modified: `src/kernel/memory.c`, `tools/build/arch-arm64.mk`
+  - Testing: ✅ VERIFIED - System boots without PC 0x600003C5 crash
+  - Status: System now boots through file system initialization (hangs at RAM disk creation)
+
+- ✅ **Created comprehensive test infrastructure**
+  - Added ARM64 RAMFS smoke test: `scripts/testing/test_arm64_ramfs_smoke.sh`
+  - Added exception save/restore test: `scripts/testing/test_exception_save_restore.sh`
+  - Added basic boot test: `scripts/testing/test_basic_boot.sh`
+  - Documented allocator alignment guarantees: `docs/development/ALLOCATOR_ALIGNMENT_GUARANTEES.md`
+  - Updated SFS handover document with test procedures
 
 - ✅ **Fixed relative path handling (Bug #3)** - Paths with `.` and `..` now work!
   - Added `normalize_path()` function to properly resolve path components
@@ -245,23 +254,24 @@ Quick action items organized by priority and timeframe.
 | 1 | ✅ Fixed | Shell | Output redirection broken | ✅ FIXED (Oct 2025) |
 | 2 | ✅ Fixed | Block Device | Registration crashes | ✅ FIXED (Oct 2025) |
 | 3 | ✅ Fixed | VFS | Relative paths fail | ✅ FIXED (Oct 2025) |
-| 4 | 🔴 Critical | SFS | File creation crashes after directory traversal | Investigating |
-| 5 | 🟡 High | Shell | Directory navigation edge cases | Testing |
-| 6 | 🟢 Medium | Shell | Limited command history | Workaround exists |
-| 7 | 🟢 Medium | Various | Error messages unclear | Gradual improvement |
-| 8 | ⚪ Low | RAMFS | Timestamps not maintained | By design |
-| 9 | ⚪ Low | File Systems | File size limited | By design |
+| 4 | ✅ Fixed | SFS | SIMD vectorization crash (PC: 0x600003C5) | ✅ FIXED (Oct 2025) |
+| 5 | 🟡 High | SFS | System hangs at RAM disk creation | Investigating |
+| 6 | 🟢 Medium | Shell | Directory navigation edge cases | Testing |
+| 7 | 🟢 Medium | Shell | Limited command history | Workaround exists |
+| 8 | 🟢 Medium | Various | Error messages unclear | Gradual improvement |
+| 9 | ⚪ Low | RAMFS | Timestamps not maintained | By design |
+| 10 | ⚪ Low | File Systems | File size limited | By design |
 
 ### Open Bugs
 
 | ID | Priority | Component | Description | Status |
 |----|----------|-----------|-------------|--------|
-| 4 | 🔴 Critical | SFS | File creation crashes after directory traversal | Investigating |
-| 5 | 🟡 High | Shell | Directory navigation edge cases | Testing |
-| 6 | 🟢 Medium | Shell | Limited command history | Workaround exists |
-| 7 | 🟢 Medium | Various | Error messages unclear | Gradual improvement |
-| 8 | ⚪ Low | RAMFS | Timestamps not maintained | By design |
-| 9 | ⚪ Low | File Systems | File size limited | By design |
+| 5 | 🟡 High | SFS | System hangs at RAM disk creation | Investigating |
+| 6 | 🟢 Medium | Shell | Directory navigation edge cases | Testing |
+| 7 | 🟢 Medium | Shell | Limited command history | Workaround exists |
+| 8 | 🟢 Medium | Various | Error messages unclear | Gradual improvement |
+| 9 | ⚪ Low | RAMFS | Timestamps not maintained | By design |
+| 10 | ⚪ Low | File Systems | File size limited | By design |
 
 ### Recently Fixed
 - ✅ SFS stack corruption crash - `cd /sfs` now works without crashing
@@ -355,7 +365,7 @@ Tutorials:      ██████░░░░░░░░░░░░░░  30
 **Next Review**: End of week
 **Owner**: MiniOS Development Team
 
-**Recent Achievement**: 🎉 Fixed critical SFS stack corruption crash! Directory operations (`cd /sfs`) now work. Next: Fix file creation crash.
+**Recent Achievement**: 🎉 Fixed critical SIMD vectorization crash! System boots through file system initialization. No more PC 0x600003C5 crashes. Next: Investigate RAM disk creation hang.
 
 ---
 

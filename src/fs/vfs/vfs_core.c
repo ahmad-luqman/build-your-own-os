@@ -9,6 +9,59 @@
 #include "kernel.h"
 #include "ramfs.h"
 #include "sfs.h"
+#include <string.h>
+
+// Helper functions to prevent GCC vectorization bugs
+// These functions use memcpy to avoid structure assignment optimizations
+// that can cause stack corruption with SIMD instructions
+
+// Copy inode structure safely
+static inline void vfs_copy_inode(struct inode *dest, const struct inode *src)
+    __attribute__((always_inline, nonnull));
+static inline void vfs_copy_inode(struct inode *dest, const struct inode *src) {
+    memcpy(dest, src, sizeof(struct inode));
+}
+
+// Copy ramfs node data to inode safely
+static inline void vfs_populate_stat_from_ramfs(struct inode *stat_buf,
+                                                 const struct ramfs_node *node,
+                                                 struct file_system *fs)
+    __attribute__((always_inline, nonnull));
+static inline void vfs_populate_stat_from_ramfs(struct inode *stat_buf,
+                                                 const struct ramfs_node *node,
+                                                 struct file_system *fs) {
+    // Use individual field assignments to prevent vectorization
+    stat_buf->ino = node->ino;
+    stat_buf->mode = node->mode;
+    stat_buf->size = node->size;
+    stat_buf->created_time = node->created_time;
+    stat_buf->modified_time = node->modified_time;
+    stat_buf->accessed_time = node->accessed_time;
+    stat_buf->fs = fs;
+    stat_buf->private_data = (void*)node;
+    stat_buf->ref_count = 1;
+}
+
+// Copy SFS inode data to stat buffer safely
+static inline void vfs_populate_stat_from_sfs(struct inode *stat_buf,
+                                              const struct inode *inode,
+                                              struct file_system *fs)
+    __attribute__((always_inline, nonnull));
+static inline void vfs_populate_stat_from_sfs(struct inode *stat_buf,
+                                              const struct inode *inode,
+                                              struct file_system *fs) {
+    // Use individual field assignments to prevent vectorization
+    stat_buf->ino = inode->ino;
+    stat_buf->mode = inode->mode;
+    stat_buf->size = inode->size;
+    stat_buf->blocks = inode->blocks;
+    stat_buf->created_time = inode->created_time;
+    stat_buf->modified_time = inode->modified_time;
+    stat_buf->accessed_time = inode->accessed_time;
+    stat_buf->fs = fs;
+    stat_buf->private_data = NULL;
+    stat_buf->ref_count = 1;
+}
 
 // Maximum number of registered file system types
 #define MAX_FS_TYPES        16
@@ -1061,15 +1114,7 @@ int vfs_stat(const char *path, struct inode *stat_buf)
         }
 
         memset(stat_buf, 0, sizeof(struct inode));
-        stat_buf->ino = node->ino;
-        stat_buf->mode = node->mode;
-        stat_buf->size = node->size;
-        stat_buf->created_time = node->created_time;
-        stat_buf->modified_time = node->modified_time;
-        stat_buf->accessed_time = node->accessed_time;
-        stat_buf->fs = fs;
-        stat_buf->private_data = node;
-        stat_buf->ref_count = 1;
+        vfs_populate_stat_from_ramfs(stat_buf, node, fs);
         return VFS_SUCCESS;
     } else if (fs->type == &sfs_fs_type) {
         struct inode *inode = sfs_resolve_path(fs, fs_path);
@@ -1078,16 +1123,7 @@ int vfs_stat(const char *path, struct inode *stat_buf)
         }
 
         memset(stat_buf, 0, sizeof(struct inode));
-        stat_buf->ino = inode->ino;
-        stat_buf->mode = inode->mode;
-        stat_buf->size = inode->size;
-        stat_buf->blocks = inode->blocks;
-        stat_buf->created_time = inode->created_time;
-        stat_buf->modified_time = inode->modified_time;
-        stat_buf->accessed_time = inode->accessed_time;
-        stat_buf->fs = fs;
-        stat_buf->private_data = NULL;
-        stat_buf->ref_count = 1;
+        vfs_populate_stat_from_sfs(stat_buf, inode, fs);
 
         sfs_put_inode(inode);
         return VFS_SUCCESS;

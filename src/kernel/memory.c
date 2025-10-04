@@ -164,23 +164,27 @@ void memory_show_layout(struct boot_info *boot_info)
 // Simple memory allocation for shell (basic implementation)
 // In a real OS, this would use a proper heap allocator
 
-static char simple_heap[256 * 1024];  // 256KB static heap (increased from 64KB)
+#define KMALLOC_ALIGNMENT 16
+
+static uint8_t simple_heap[256 * 1024] __attribute__((aligned(KMALLOC_ALIGNMENT)));  // 256KB static heap
 static size_t heap_offset = 0;
 
 void *kmalloc(size_t size) {
     // Simple bump allocator
     if (size == 0) return NULL;
-    
-    // Align to 8 bytes
-    size = (size + 7) & ~7;
-    
-    if (heap_offset + size > sizeof(simple_heap)) {
+
+    // Align requested size and heap pointer so we can safely satisfy
+    // callers that issue 128-bit accesses (e.g. NEON stores emitted by GCC).
+    size = (size + (KMALLOC_ALIGNMENT - 1)) & ~(size_t)(KMALLOC_ALIGNMENT - 1);
+    size_t aligned_offset = (heap_offset + (KMALLOC_ALIGNMENT - 1)) & ~(size_t)(KMALLOC_ALIGNMENT - 1);
+
+    if (aligned_offset + size > sizeof(simple_heap)) {
         early_print("kmalloc: OUT OF MEMORY\n");
         return NULL;  // Out of memory
     }
-    
-    void *ptr = &simple_heap[heap_offset];
-    heap_offset += size;
+
+    void *ptr = &simple_heap[aligned_offset];
+    heap_offset = aligned_offset + size;
 
     // Debug output with address (simplified)
     early_print("kmalloc: OK\n");

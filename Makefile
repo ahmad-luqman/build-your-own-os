@@ -103,11 +103,9 @@ $(BUILD_DIR)/$(ARCH)/kernel.elf: $(ALL_OBJECTS) $(SRC_DIR)/arch/$(ARCH)/linker.l
 	@echo "Kernel built: $@"
 	@$(OBJDUMP) -h $@
 
-# Special rule for ramfs_core.c - compile with -O0 to avoid compiler optimization issues
-$(BUILD_DIR)/$(ARCH)/fs/ramfs/ramfs_core.o: $(SRC_DIR)/fs/ramfs/ramfs_core.c
-	@echo "Compiling $< with -O0 (optimization disabled)..."
-	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -O0 -MMD -c $< -o $@
+# ramfs_core.c no longer needs special compilation rules
+
+# sfs_core.c no longer needs special compilation rules
 
 # Compile C sources
 $(BUILD_DIR)/$(ARCH)/%.o: $(SRC_DIR)/%.c
