@@ -36,18 +36,37 @@ int parse_command_line(const char *input, struct command_line *cmd)
     // Check for I/O redirection (simple implementation)
     for (int i = 1; i < cmd->argument_count; i++) {
         if (cmd->arguments[i][0] == '>') {
-            // Output redirection
-            if (strlen(cmd->arguments[i]) > 1) {
-                // Format: >filename
-                cmd->output_redirect = cmd->arguments[i] + 1;
-            } else if (i + 1 < cmd->argument_count) {
-                // Format: > filename
-                cmd->output_redirect = cmd->arguments[i + 1];
-                // Remove redirection from arguments
-                for (int j = i; j < cmd->argument_count - 2; j++) {
-                    cmd->arguments[j] = cmd->arguments[j + 2];
+            // Check for append redirection (>>) first
+            if (cmd->arguments[i][1] == '>') {
+                // Append redirection
+                if (strlen(cmd->arguments[i]) > 2) {
+                    // Format: >>filename
+                    cmd->output_redirect = cmd->arguments[i] + 2;
+                } else if (i + 1 < cmd->argument_count) {
+                    // Format: >> filename
+                    cmd->output_redirect = cmd->arguments[i + 1];
+                    // Remove redirection from arguments
+                    for (int j = i; j < cmd->argument_count - 2; j++) {
+                        cmd->arguments[j] = cmd->arguments[j + 2];
+                    }
+                    cmd->argument_count -= 2;
                 }
-                cmd->argument_count -= 2;
+                cmd->output_append = 1;
+            } else {
+                // Regular output redirection
+                if (strlen(cmd->arguments[i]) > 1) {
+                    // Format: >filename
+                    cmd->output_redirect = cmd->arguments[i] + 1;
+                } else if (i + 1 < cmd->argument_count) {
+                    // Format: > filename
+                    cmd->output_redirect = cmd->arguments[i + 1];
+                    // Remove redirection from arguments
+                    for (int j = i; j < cmd->argument_count - 2; j++) {
+                        cmd->arguments[j] = cmd->arguments[j + 2];
+                    }
+                    cmd->argument_count -= 2;
+                }
+                cmd->output_append = 0;
             }
             break;
         } else if (cmd->arguments[i][0] == '<') {
@@ -74,6 +93,11 @@ int parse_command_line(const char *input, struct command_line *cmd)
             }
             cmd->argument_count--;
             break;
+        } else if (cmd->arguments[i][0] == '|') {
+            // Basic pipe support: split command at pipe
+            // For now, just detect and report (full implementation later)
+            shell_printf("Pipe detected but not yet fully implemented\n");
+            break;
         }
     }
     
@@ -88,14 +112,20 @@ int execute_command(struct shell_context *ctx, struct command_line *cmd)
     }
     
     // Store output redirection in context so commands can access it
-    // Save the original value
+    // Save the original values
     char *saved_output_redirect = ctx->output_redirect_file;
+    int saved_append_mode = ctx->output_append_mode;
+    char *saved_input_redirect = ctx->input_redirect_file;
     ctx->output_redirect_file = cmd->output_redirect;
+    ctx->output_append_mode = cmd->output_append;
+    ctx->input_redirect_file = cmd->input_redirect;
     
     // Set up I/O redirection if specified
     if (setup_io_redirection(cmd) < 0) {
         shell_print_error("Failed to set up I/O redirection\n");
         ctx->output_redirect_file = saved_output_redirect;
+        ctx->output_append_mode = saved_append_mode;
+        ctx->input_redirect_file = saved_input_redirect;
         return SHELL_ERROR;
     }
     
@@ -109,12 +139,16 @@ int execute_command(struct shell_context *ctx, struct command_line *cmd)
         if (result == SHELL_ENOENT) {
             shell_printf("Command not found: %s\n", cmd->command);
             ctx->output_redirect_file = saved_output_redirect;
+            ctx->output_append_mode = saved_append_mode;
+            ctx->input_redirect_file = saved_input_redirect;
             return SHELL_ENOENT;
         }
     }
     
     // Restore context
     ctx->output_redirect_file = saved_output_redirect;
+    ctx->output_append_mode = saved_append_mode;
+    ctx->input_redirect_file = saved_input_redirect;
     
     return result;
 }
@@ -135,6 +169,7 @@ void free_command_line(struct command_line *cmd)
     cmd->command = NULL;
     cmd->input_redirect = NULL;
     cmd->output_redirect = NULL;
+    cmd->output_append = 0;
     cmd->background = 0;
 }
 
@@ -151,10 +186,17 @@ int execute_builtin_command(struct shell_context *ctx, struct command_line *cmd)
         return SHELL_ENOENT;
     }
     
-    // Validate argument count
-    if (shell_cmd->min_args >= 0 && cmd->argument_count - 1 < shell_cmd->min_args) {
+    // Validate argument count, considering input/output redirection
+    int effective_min_args = shell_cmd->min_args;
+    
+    // Special case for cat: if input redirection is active, reduce min_args requirement
+    if (strcmp(cmd->command, "cat") == 0 && (cmd->input_redirect || ctx->input_redirect_file)) {
+        effective_min_args = 0;  // cat < file doesn't need additional arguments
+    }
+    
+    if (effective_min_args >= 0 && cmd->argument_count - 1 < effective_min_args) {
         shell_printf("Error: %s requires at least %d arguments\n", 
-                    cmd->command, shell_cmd->min_args);
+                    cmd->command, effective_min_args);
         return SHELL_EINVAL;
     }
     

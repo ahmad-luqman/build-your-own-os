@@ -52,6 +52,8 @@ struct shell_context {
     
     // Output redirection (set by parser, used by commands)
     char *output_redirect_file;     // File for output redirection (NULL if none)
+    int output_append_mode;         // 1 if >> (append), 0 if > (truncate)
+    char *input_redirect_file;      // File for input redirection (NULL if none)
     
     // Phase 7: Environment variables
     char **environment;             // Environment variables
@@ -74,7 +76,10 @@ struct command_line {
     int argument_count;
     char *input_redirect;
     char *output_redirect;
+    int output_append;        // 1 if >> (append), 0 if > (truncate)
     int background;
+    // Basic pipe support
+    struct command_line *pipe_next;  // Next command in pipe chain
 };
 
 // Shell core functions

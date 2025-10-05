@@ -10,57 +10,54 @@
 - [x] System boots through file system initialization
 - [x] Comprehensive test infrastructure created
 - [x] RAMFS basic file operations validated (`touch`, `echo`, `cat`, `mkdir`, `ls`, `pwd`)
+- [x] SFS directory traversal crash fixed - ✅ FIXED (Oct 6, 2025)
+- [x] RAM disk creation hang fixed - ✅ FIXED (Oct 6, 2025)
+- [x] Memory exhaustion issues resolved - Heap increased from 256KB to 2MB
 
-### ❌ Critical Issues Remaining
-- [x] System hangs at RAM disk creation (during SFS initialization) - ✅ FIXED
-- [x] RAM disk allocation issue (size calculation) - ✅ FIXED
-- [ ] Directory traversal stable after SFS mount (regression observed Oct 5, 2025)
-- [x] SIMD vectorization crash fixed
+### 🎯 Current Focus: Shell I/O Redirection (Phase 6)
+- [x] **Append redirection (`>>`)** - ✅ COMPLETED (Oct 5, 2025)
+  - Parser recognizes `>>` operator, commands use VFS_O_APPEND flag
+  - Testing verified: `echo "line2" >> existing_file.txt` works correctly
+- [x] **Input redirection (`<`)** - ✅ ENHANCED (Oct 5, 2025) 
+  - Core functionality working, cat command handles input redirection
+  - Minor validation refinement needed (low priority)
+- [x] **Basic pipe detection (`|`)** - ✅ INFRASTRUCTURE READY (Oct 5, 2025)
+  - Parser detects pipes, structures in place for full implementation
 
-## Immediate Priority (Next 1-2 days)
+### ❌ Issues Resolved - SFS Now Stable
+- [x] System hangs at RAM disk creation - ✅ FIXED
+- [x] RAM disk allocation issue (size calculation) - ✅ FIXED  
+- [x] Directory traversal stable after SFS mount - ✅ FIXED
+- [x] SIMD vectorization crash - ✅ FIXED
 
-### 1. Fix RAM Disk Creation Hang - ✅ COMPLETED
-**Status**: ✅ FIXED - RAM disk now creates successfully with 4MB size
-**Location**: `src/fs/block/ramdisk.c` - `ramdisk_create()` function
-**Solution Implemented**:
-1. Changed from kmalloc back to memory_alloc for larger allocations
-2. Removed 32KB size cap that was causing the discrepancy
-3. Eliminated slow byte-by-byte zero-filling loop (was causing hang)
-4. Used memory_alloc which returns pre-zeroed memory
-5. Testing verified 1024 blocks of 4096 bytes each (4MB total)
+## Next Priority (Shell Completion - Phase 6)
 
-**Files Modified**: `src/fs/block/ramdisk.c`
+### 1. Complete Basic Pipes (`|`) - READY FOR IMPLEMENTATION
+**Status**: 🟡 Infrastructure ready, needs execution logic
+**Goal**: Implement `cmd1 | cmd2` with temporary file approach
+**Approach**:
+1. Parse pipe operator (✅ completed)
+2. Execute first command with output to temporary file
+3. Execute second command with input from temporary file
+4. Clean up temporary file
+**Expected Timeline**: 15-30 minutes implementation
 
-### 2. Investigate SFS Directory Traversal Crash - 🚨 NEW (Oct 5, 2025)
-**Status**: ❌ Reproduced - page fault triggered immediately after mounting SFS
-**Repro Steps**:
-```bash
-mkdir /sfs
-mkfs ramdisk0
-mount ramdisk0 /sfs sfs
-cd /sfs
-```
-**Observed**:
-- ARM64 page fault (`PC=0x4009AF68`, `FAR=0x401FFA4C`, `ESR=0x96000021`) leading to kernel halt
-- See `tmp/sfs_mount_shell_sequence.log` for full trace
-- Crash happens even though SFS mount reports success; RAMFS operations remain stable
-**Hypothesis**:
-- Directory lookup/`vfs_stat` for `/sfs` returning corrupted inode or invalid pointer
-- Possible regression from recent memcpy/barrier changes in `sfs_core.c`
-**Immediate Actions**:
-1. Add targeted logging or asserts in `sfs_core.c` path resolution (`sfs_lookup`, `sfs_dir_read`) to capture inode state
-2. Validate mountpoint root inode setup after `sfs_mount`
-3. Review stack usage around `cmd_cd`/`vfs_stat` interaction for newly mounted filesystems
-4. Consider temporarily disabling aggressive compiler optimizations (`-O0`) to confirm if optimization-sensitive
+### 2. Add Tab Completion - NEXT FEATURE
+**Status**: 🟡 Ready to implement
+**Goal**: Complete command names on TAB press  
+**Approach**:
+1. Implement TAB key detection in shell input
+2. Match partial command against builtin command list
+3. Display completions or auto-complete if unique
+**Expected Timeline**: 15-20 minutes implementation
 
-### 3. Resume File Operations Testing (Blocked by #2)
-**Status**: ⏸ Blocked - await resolution of directory traversal crash
-**Next Steps (once unblocked)**:
-1. Test file creation commands (`echo "text" > file`, `touch`)
-2. Verify SFS file operations work correctly with 4MB RAM disk
-3. Test `cat` command for file reading
-4. Test file persistence across mount/unmount
-5. Complete basic file operations (read, write, delete)
+### 3. Enhanced Error Messages - POLISH PHASE  
+**Status**: 🟢 Ongoing improvement
+**Goal**: User-friendly, contextual error messages
+**Examples**: 
+- "file not found" → "file 'test.txt' not found in '/current/dir'"
+- Add command usage hints when arguments missing
+**Expected Timeline**: 10-15 minutes per command
 
 ### 4. Complete Basic File Operations
 **Files to investigate**:

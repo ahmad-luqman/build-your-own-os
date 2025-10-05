@@ -262,12 +262,23 @@ int cmd_ls(struct shell_context *ctx, int argc, char *argv[])
 // Display file contents command  
 int cmd_cat(struct shell_context *ctx, int argc, char *argv[])
 {
-    if (!ctx || argc < 2) {
-        shell_print_error("Usage: cat <filename>\n");
+    if (!ctx) {
         return SHELL_EINVAL;
     }
     
-    const char *filename = argv[1];
+    const char *filename = NULL;
+    
+    // Check for input redirection first
+    if (ctx->input_redirect_file) {
+        // Input redirection: cat < file
+        filename = ctx->input_redirect_file;
+    } else if (argc >= 2) {
+        // Normal usage: cat filename
+        filename = argv[1];
+    } else {
+        shell_print_error("Usage: cat <filename> or cat < <filename>\n");
+        return SHELL_EINVAL;
+    }
     
     // Build full path if relative
     char full_path[SHELL_MAX_PATH_LENGTH];
@@ -520,8 +531,15 @@ int cmd_echo(struct shell_context *ctx, int argc, char *argv[])
         char full_path[SHELL_MAX_PATH_LENGTH];
         build_full_path(full_path, sizeof(full_path), ctx->current_directory, filename);
         
-        // Open/create file for writing
-        int fd = vfs_open(full_path, VFS_O_WRONLY | VFS_O_CREAT | VFS_O_TRUNC, 0644);
+        // Open/create file for writing or appending
+        int flags = VFS_O_WRONLY | VFS_O_CREAT;
+        if (ctx->output_append_mode) {
+            flags |= VFS_O_APPEND;  // Append mode
+        } else {
+            flags |= VFS_O_TRUNC;   // Truncate mode
+        }
+        
+        int fd = vfs_open(full_path, flags, 0644);
         if (fd < 0) {
             shell_print_error("Cannot create file: ");
             shell_print_error(full_path);

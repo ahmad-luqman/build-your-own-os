@@ -17,7 +17,7 @@ static struct shell_command shell_commands[] = {
     
     // File listing and content
     {"ls", "List directory contents", cmd_ls, 0, 2},
-    {"cat", "Display file contents", cmd_cat, 1, 1},
+    {"cat", "Display file contents", cmd_cat, 0, 1},
     
     // File management
     {"mkdir", "Create directory", cmd_mkdir, 1, 1},
