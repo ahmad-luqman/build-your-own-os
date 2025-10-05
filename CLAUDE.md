@@ -145,3 +145,20 @@ Use `make DEBUG=1` for:
 - Architecture-specific changes: Modify files in `src/arch/<arch>/`
 - New device drivers: Add to `src/drivers/` with appropriate abstractions
 - User applications: Add to `src/userland/` and update Makefile targets
+
+## Code Contribution Guidelines
+
+### Commit Message Standards
+- **DO NOT** add any Claude Code attribution or signatures in commit messages
+- Write clear, descriptive commit messages following conventional commit format
+- Focus on what was changed and why, not who made the change
+- Examples of good commit messages:
+  - "Add pipe detection to shell parser"
+  - "Fix SFS page fault by disabling SIMD optimizations"
+  - "Update build configuration for ARM64 cross-compilation"
+
+### Development Principles
+- Prioritize system stability and avoid breaking existing functionality
+- Use test-driven development approach when implementing new features
+- Test on both ARM64 and x86-64 architectures when applicable
+- Maintain clean, readable code with proper documentation
