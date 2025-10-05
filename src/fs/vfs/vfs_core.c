@@ -1048,14 +1048,26 @@ int vfs_rename(const char *oldpath, const char *newpath)
         return VFS_EINVAL;
     }
 
-    struct file_system *old_fs = vfs_get_filesystem(oldpath);
-    struct file_system *new_fs = vfs_get_filesystem(newpath);
+    // Find mounts for both paths
+    struct vfs_mount *old_mount = vfs_find_mount_for_path(oldpath);
+    struct vfs_mount *new_mount = vfs_find_mount_for_path(newpath);
 
-    if (!old_fs || old_fs != new_fs || old_fs->type != &ramfs_fs_type) {
+    // Rename only works within the same filesystem
+    if (!old_mount || !new_mount || old_mount != new_mount) {
         return VFS_EINVAL;
     }
 
-    struct ramfs_node *node = vfs_ramfs_resolve(old_fs, oldpath);
+    struct file_system *fs = old_mount->fs;
+
+    // Currently only RAMFS supports rename
+    if (fs->type != &ramfs_fs_type) {
+        return VFS_EINVAL;
+    }
+
+    // Get path relative to mount point for validation
+    const char *old_fs_path = vfs_path_within_mount(old_mount, oldpath);
+
+    struct ramfs_node *node = vfs_ramfs_resolve(fs, old_fs_path);
     if (!node) {
         return VFS_ENOENT;
     }
