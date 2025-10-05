@@ -88,17 +88,11 @@ Quick action items organized by priority and timeframe.
   - Core functionality working: `cat < filename` executes correctly
   - Minor: Validation message needs refinement (low priority)
   - Files modified: `src/include/shell.h`, `src/shell/parser/parser.c`, `src/shell/commands/builtin.c`
-- [x] **Basic pipe implementation** (`cmd1 | cmd2`) - ✅ COMPLETED (Oct 5, 2025)
-  - Implemented full pipe execution using temporary file bridge approach
-  - Added `build_pipe_temp_path()` function to create unique temp files (`/tmp/pipe_<n>`)
-  - Enhanced parser to split commands at pipe operator and execute left→right
-  - Left command output redirected to temp file, right command reads from temp file
-  - Automatic cleanup: temp files unlinked after right command completes
-  - Supports all basic pipe operations: `echo "hello" | cat`, `ls | cat`, etc.
-  - Error handling for invalid pipe syntax and missing commands
-  - Files modified: `src/shell/parser/parser.c` (lines 151-207, 11-46)
-  - Foundation ready for future multiple pipe support (`cmd1 | cmd2 | cmd3`)
-  - **File System Testing**: ✅ RAMFS tested and working, ⚠️ SFS not tested (expected to work)
+- [x] **Basic pipe detection** (`cmd1 | cmd2`) - ✅ STARTED (Oct 5, 2025)
+  - Added `pipe_next` field to command_line structure for pipe chains
+  - Parser now detects pipe operators and reports them
+  - Infrastructure ready for full pipe implementation
+  - Next: Implement pipe execution with temporary file approach
 - [ ] Add **tab completion** for commands
 - [ ] Add **tab completion** for file paths
 - [ ] Add **arrow key navigation** in command line

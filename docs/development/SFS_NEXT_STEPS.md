@@ -21,10 +21,8 @@
 - [x] **Input redirection (`<`)** - ✅ ENHANCED (Oct 5, 2025) 
   - Core functionality working, cat command handles input redirection
   - Minor validation refinement needed (low priority)
-- [x] **Basic pipe implementation (`|`)** - ✅ COMPLETED (Oct 5, 2025)
-  - Full pipe execution implemented using temporary file bridge
-  - Supports `cmd1 | cmd2` syntax with automatic temp file cleanup
-  - Foundation ready for multiple pipes (`cmd1 | cmd2 | cmd3`)
+- [x] **Basic pipe detection (`|`)** - ✅ INFRASTRUCTURE READY (Oct 5, 2025)
+  - Parser detects pipes, structures in place for full implementation
 
 ### ❌ Issues Resolved - SFS Now Stable
 - [x] System hangs at RAM disk creation - ✅ FIXED
@@ -34,16 +32,15 @@
 
 ## Next Priority (Shell Completion - Phase 6)
 
-### 1. ✅ Complete Basic Pipes (`|`) - IMPLEMENTATION COMPLETED
-**Status**: 🟢 Fully implemented and tested
-**Goal**: ✅ ACHIEVED - `cmd1 | cmd2` working with temporary file approach
-**Implementation**:
-1. ✅ Parse pipe operator and detect pipe position
-2. ✅ Execute left command with output redirected to `/tmp/pipe_<n>`
-3. ✅ Execute right command with input from temporary file
-4. ✅ Clean up temporary file with `vfs_unlink()`
-**Files Modified**: `src/shell/parser/parser.c` (lines 11-46, 151-207)
-**Testing**: Ready for QEMU validation
+### 1. Complete Basic Pipes (`|`) - READY FOR IMPLEMENTATION
+**Status**: 🟡 Infrastructure ready, needs execution logic
+**Goal**: Implement `cmd1 | cmd2` with temporary file approach
+**Approach**:
+1. Parse pipe operator (✅ completed)
+2. Execute first command with output to temporary file
+3. Execute second command with input from temporary file
+4. Clean up temporary file
+**Expected Timeline**: 15-30 minutes implementation
 
 ### 2. Add Tab Completion - NEXT FEATURE
 **Status**: 🟡 Ready to implement

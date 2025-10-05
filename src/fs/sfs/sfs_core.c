@@ -17,35 +17,15 @@
 static inline void sfs_sync_inode_data_safe(struct sfs_inode *disk_inode, const struct inode *inode)
     __attribute__((always_inline, nonnull));
 static inline void sfs_sync_inode_data_safe(struct sfs_inode *disk_inode, const struct inode *inode) {
-  #ifdef __aarch64__
     __asm__ volatile("dmb ish" ::: "memory");
-#elif defined(__x86_64__)
-    __asm__ volatile("mfence" ::: "memory");
-#endif
     disk_inode->size = inode->size;
-  #ifdef __aarch64__
     __asm__ volatile("dmb ish" ::: "memory");
-#elif defined(__x86_64__)
-    __asm__ volatile("mfence" ::: "memory");
-#endif
     disk_inode->blocks = inode->blocks;
-  #ifdef __aarch64__
     __asm__ volatile("dmb ish" ::: "memory");
-#elif defined(__x86_64__)
-    __asm__ volatile("mfence" ::: "memory");
-#endif
     disk_inode->modified_time = inode->modified_time;
-  #ifdef __aarch64__
     __asm__ volatile("dmb ish" ::: "memory");
-#elif defined(__x86_64__)
-    __asm__ volatile("mfence" ::: "memory");
-#endif
     disk_inode->accessed_time = inode->accessed_time;
-  #ifdef __aarch64__
     __asm__ volatile("dmb ish" ::: "memory");
-#elif defined(__x86_64__)
-    __asm__ volatile("mfence" ::: "memory");
-#endif
 }
 
 // SFS file operations
@@ -735,11 +715,7 @@ static struct inode *sfs_allocate_vfs_inode(struct file_system *fs, uint32_t ino
     memset(inode_data, 0, sizeof(struct sfs_inode_data));
 
     // Full memory barrier to prevent compiler reordering
-  #ifdef __aarch64__
     __asm__ volatile("dmb ish" ::: "memory");
-#elif defined(__x86_64__)
-    __asm__ volatile("mfence" ::: "memory");
-#endif
 
     // Set inode fields
     inode->ino = inode_num;
@@ -754,96 +730,40 @@ static struct inode *sfs_allocate_vfs_inode(struct file_system *fs, uint32_t ino
     inode->ref_count = 1;
 
     // Copy inode data field-by-field to prevent SIMD generation
-  #ifdef __aarch64__
     __asm__ volatile("dmb ish" ::: "memory");
-#elif defined(__x86_64__)
-    __asm__ volatile("mfence" ::: "memory");
-#endif
     inode_data->disk_inode.mode = disk_inode->mode;
-  #ifdef __aarch64__
     __asm__ volatile("dmb ish" ::: "memory");
-#elif defined(__x86_64__)
-    __asm__ volatile("mfence" ::: "memory");
-#endif
     inode_data->disk_inode.size = disk_inode->size;
-  #ifdef __aarch64__
     __asm__ volatile("dmb ish" ::: "memory");
-#elif defined(__x86_64__)
-    __asm__ volatile("mfence" ::: "memory");
-#endif
     inode_data->disk_inode.blocks = disk_inode->blocks;
-  #ifdef __aarch64__
     __asm__ volatile("dmb ish" ::: "memory");
-#elif defined(__x86_64__)
-    __asm__ volatile("mfence" ::: "memory");
-#endif
     for (int i = 0; i < SFS_DIRECT_BLOCKS; i++) {
         inode_data->disk_inode.direct[i] = disk_inode->direct[i];
     }
-  #ifdef __aarch64__
     __asm__ volatile("dmb ish" ::: "memory");
-#elif defined(__x86_64__)
-    __asm__ volatile("mfence" ::: "memory");
-#endif
     inode_data->disk_inode.indirect = disk_inode->indirect;
-  #ifdef __aarch64__
     __asm__ volatile("dmb ish" ::: "memory");
-#elif defined(__x86_64__)
-    __asm__ volatile("mfence" ::: "memory");
-#endif
     inode_data->disk_inode.created_time = disk_inode->created_time;
-  #ifdef __aarch64__
     __asm__ volatile("dmb ish" ::: "memory");
-#elif defined(__x86_64__)
-    __asm__ volatile("mfence" ::: "memory");
-#endif
     inode_data->disk_inode.modified_time = disk_inode->modified_time;
-  #ifdef __aarch64__
     __asm__ volatile("dmb ish" ::: "memory");
-#elif defined(__x86_64__)
-    __asm__ volatile("mfence" ::: "memory");
-#endif
     inode_data->disk_inode.accessed_time = disk_inode->accessed_time;
-  #ifdef __aarch64__
     __asm__ volatile("dmb ish" ::: "memory");
-#elif defined(__x86_64__)
-    __asm__ volatile("mfence" ::: "memory");
-#endif
     inode_data->disk_inode.links = disk_inode->links;
-  #ifdef __aarch64__
     __asm__ volatile("dmb ish" ::: "memory");
-#elif defined(__x86_64__)
-    __asm__ volatile("mfence" ::: "memory");
-#endif
     inode_data->disk_inode.flags = disk_inode->flags;
-  #ifdef __aarch64__
     __asm__ volatile("dmb ish" ::: "memory");
-#elif defined(__x86_64__)
-    __asm__ volatile("mfence" ::: "memory");
-#endif
     // Copy reserved field byte-by-byte
     for (size_t i = 0; i < sizeof(disk_inode->reserved); i++) {
         inode_data->disk_inode.reserved[i] = disk_inode->reserved[i];
     }
-  #ifdef __aarch64__
     __asm__ volatile("dmb ish" ::: "memory");
-#elif defined(__x86_64__)
-    __asm__ volatile("mfence" ::: "memory");
-#endif
     inode_data->inode_num = inode_num;
     inode_data->dirty = 0;
-  #ifdef __aarch64__
     __asm__ volatile("dmb ish" ::: "memory");
-#elif defined(__x86_64__)
-    __asm__ volatile("mfence" ::: "memory");
-#endif
 
     // Final barrier before return
-  #ifdef __aarch64__
     __asm__ volatile("dmb ish" ::: "memory");
-#elif defined(__x86_64__)
-    __asm__ volatile("mfence" ::: "memory");
-#endif
 
     return inode;
 }
@@ -986,17 +906,9 @@ struct inode *sfs_alloc_inode(struct file_system *fs, uint32_t mode)
             new_inode.indirect = 0;
 
             // Add memory barrier to prevent GCC vectorization from causing stack corruption
-          #ifdef __aarch64__
-    __asm__ volatile("dmb ish" ::: "memory");
-#elif defined(__x86_64__)
-    __asm__ volatile("mfence" ::: "memory");
-#endif
+            __asm__ volatile("dmb ish" ::: "memory");
             inodes[entry] = new_inode;
-          #ifdef __aarch64__
-    __asm__ volatile("dmb ish" ::: "memory");
-#elif defined(__x86_64__)
-    __asm__ volatile("mfence" ::: "memory");
-#endif
+            __asm__ volatile("dmb ish" ::: "memory");
 
             if (sfs_write_block(fs, block_num, buffer) != VFS_SUCCESS) {
                 goto out;
@@ -1918,11 +1830,7 @@ static struct inode *sfs_dir_lookup(struct file_system *fs, struct inode *parent
     }
 
     // Memory barrier after allocation
-  #ifdef __aarch64__
     __asm__ volatile("dmb ish" ::: "memory");
-#elif defined(__x86_64__)
-    __asm__ volatile("mfence" ::: "memory");
-#endif
 
     struct inode *found_inode = NULL;
     
@@ -1950,11 +1858,7 @@ static struct inode *sfs_dir_lookup(struct file_system *fs, struct inode *parent
             if (strncmp(entries[i].name, name, SFS_MAX_NAME) == 0) {
                 found_inode = sfs_get_inode(fs, entries[i].inode);
                 // Memory barrier after getting inode
-              #ifdef __aarch64__
-    __asm__ volatile("dmb ish" ::: "memory");
-#elif defined(__x86_64__)
-    __asm__ volatile("mfence" ::: "memory");
-#endif
+                __asm__ volatile("dmb ish" ::: "memory");
                 break;
             }
         }
@@ -1965,11 +1869,7 @@ static struct inode *sfs_dir_lookup(struct file_system *fs, struct inode *parent
     }
 
     // Memory barrier before cleanup and return
-  #ifdef __aarch64__
     __asm__ volatile("dmb ish" ::: "memory");
-#elif defined(__x86_64__)
-    __asm__ volatile("mfence" ::: "memory");
-#endif
 
     kfree(block_buffer);
     return found_inode;
