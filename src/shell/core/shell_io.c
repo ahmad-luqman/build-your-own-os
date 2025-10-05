@@ -5,7 +5,9 @@
 
 #include "shell.h"
 #include "kernel.h"
+#include "shell_completion.h"
 #include <stdarg.h>
+#include <string.h>
 
 // Architecture-specific UART register access for input
 #ifdef __aarch64__
@@ -92,6 +94,118 @@ static void shell_putc(char c) {
 
 #endif
 
+static void shell_display_matches(struct shell_context *ctx,
+                                  const char *matches[],
+                                  size_t match_count)
+{
+    if (!ctx || !matches || match_count == 0) {
+        return;
+    }
+
+    shell_print("\n");
+    for (size_t i = 0; i < match_count; ++i) {
+        shell_print(matches[i]);
+        if (i + 1 < match_count) {
+            shell_print("  ");
+        }
+    }
+    shell_print("\n");
+    shell_print_prompt(ctx);
+    shell_print(ctx->command_buffer);
+}
+
+static void shell_handle_tab_completion(struct shell_context *ctx, int *cursor_pos)
+{
+    if (!ctx || !cursor_pos) {
+        return;
+    }
+
+    int pos = *cursor_pos;
+    if (pos < 0) {
+        pos = 0;
+    }
+
+    int word_start = pos;
+    while (word_start > 0) {
+        char c = ctx->command_buffer[word_start - 1];
+        if (c == ' ' || c == '\t') {
+            break;
+        }
+        word_start--;
+    }
+
+    size_t prefix_len = (size_t)(pos - word_start);
+    char prefix[SHELL_MAX_COMMAND_LENGTH];
+    if (prefix_len > 0) {
+        memcpy(prefix, &ctx->command_buffer[word_start], prefix_len);
+    }
+    prefix[prefix_len] = '\0';
+
+    const char *commands[SHELL_MAX_BUILTINS];
+    size_t command_count = shell_get_builtin_command_names(commands, SHELL_MAX_BUILTINS);
+    if (command_count == 0) {
+        shell_putc('\a');
+        return;
+    }
+
+    const char *matches[SHELL_MAX_BUILTINS];
+    size_t match_count = shell_completion_collect_matches(prefix, commands, command_count, matches, SHELL_MAX_BUILTINS);
+
+    if (match_count == 0) {
+        shell_putc('\a');
+        return;
+    }
+
+    if (match_count == 1) {
+        const char *completion = matches[0];
+        size_t completion_len = strlen(completion);
+        if ((size_t)word_start + completion_len >= SHELL_MAX_COMMAND_LENGTH) {
+            shell_putc('\a');
+            return;
+        }
+
+        memcpy(&ctx->command_buffer[word_start], completion, completion_len);
+        pos = word_start + (int)completion_len;
+        ctx->command_buffer[pos] = '\0';
+
+        if (completion_len > prefix_len) {
+            shell_print(completion + prefix_len);
+        }
+
+        if ((size_t)pos < SHELL_MAX_COMMAND_LENGTH - 1) {
+            ctx->command_buffer[pos] = ' ';
+            ctx->command_buffer[pos + 1] = '\0';
+            pos++;
+            shell_putc(' ');
+        }
+
+        *cursor_pos = pos;
+        return;
+    }
+
+    char common_prefix[SHELL_MAX_COMMAND_LENGTH];
+    size_t common_len = shell_completion_common_prefix(matches, match_count, common_prefix, sizeof(common_prefix));
+    if (common_len > prefix_len) {
+        size_t additional = common_len - prefix_len;
+        size_t available = SHELL_MAX_COMMAND_LENGTH - 1 - (size_t)pos;
+        if (additional > available) {
+            additional = available;
+        }
+
+        size_t offset = prefix_len;
+        for (size_t i = 0; i < additional; ++i) {
+            char ch = common_prefix[offset + i];
+            ctx->command_buffer[pos] = ch;
+            pos++;
+            ctx->command_buffer[pos] = '\0';
+            shell_putc(ch);
+        }
+    }
+
+    shell_display_matches(ctx, matches, match_count);
+    *cursor_pos = pos;
+}
+
 // Print shell prompt
 void shell_print_prompt(struct shell_context *ctx)
 {
@@ -153,7 +267,7 @@ int shell_read_command(struct shell_context *ctx)
                 ctx->command_buffer[0] = '\0';
                 shell_print("\n^C\n");
                 return 0;
-                
+
             case 4:     // Ctrl+D (EOF)
                 if (pos == 0) {
                     // Exit shell on empty line
@@ -161,6 +275,10 @@ int shell_read_command(struct shell_context *ctx)
                     shell_print("\n");
                     return 0;
                 }
+                break;
+
+            case '\t':  // Tab completion
+                shell_handle_tab_completion(ctx, &pos);
                 break;
                 
             default:

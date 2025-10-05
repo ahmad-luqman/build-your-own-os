@@ -13,6 +13,7 @@ extern "C" {
 // Shell configuration
 #define SHELL_MAX_COMMAND_LENGTH    1024
 #define SHELL_MAX_ARGS              32
+#define SHELL_MAX_BUILTINS          64
 #define SHELL_MAX_PATH_LENGTH       VFS_MAX_PATH
 #define SHELL_PROMPT                "MiniOS> "
 #define SHELL_HISTORY_SIZE          2   // Reduced from 16
@@ -88,6 +89,7 @@ void shell_run(struct shell_context *ctx);
 void shell_cleanup(struct shell_context *ctx);
 int shell_parse_command(const char *input, char *argv[], int max_argc);
 struct shell_command *shell_find_command(const char *name);
+size_t shell_get_builtin_command_names(const char **names, size_t max_names);
 
 // Shell I/O functions
 void shell_print_prompt(struct shell_context *ctx);

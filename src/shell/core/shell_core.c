@@ -235,14 +235,28 @@ struct shell_command *shell_find_command(const char *name)
     if (!name) {
         return NULL;
     }
-    
+
     for (int i = 0; shell_commands[i].name != NULL; i++) {
         if (strcmp(shell_commands[i].name, name) == 0) {
             return &shell_commands[i];
         }
     }
-    
+
     return NULL;
+}
+
+size_t shell_get_builtin_command_names(const char **names, size_t max_names)
+{
+    if (!names || max_names == 0) {
+        return 0;
+    }
+
+    size_t count = 0;
+    for (size_t i = 0; shell_commands[i].name != NULL && count < max_names; ++i) {
+        names[count++] = shell_commands[i].name;
+    }
+
+    return count;
 }
 
 // Shell initialization for system
