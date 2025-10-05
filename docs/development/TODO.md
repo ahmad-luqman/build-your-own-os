@@ -15,12 +15,14 @@ Quick action items organized by priority and timeframe.
   - Files modified: `src/kernel/memory.c`, `src/include/memory.h`
   - Testing: ✅ VERIFIED - Now supports 505+ allocations, achieving 100% test pass rate (20/20 tests)
   - Impact: All file system operations now work without memory limitations
-- [x] **Fix SFS directory traversal page fault** - ✅ FIXED (Oct 6, 2025)
+- [x] **Fix SFS directory traversal page fault** - ❌ INCORRECTLY MARKED AS FIXED 
   - Issue: Page fault when accessing SFS directories after mount (PC: 0x4009AF68)
   - Reproduce: `mkdir /sfs`, `mkfs ramdisk0`, `mount ramdisk0 /sfs sfs`, `cd /sfs`
-  - Root cause: GCC generating SIMD instructions (ldur d31, [x21, #68]) despite anti-vectorization flags
-  - Solution: Added #pragma GCC optimize ("-O0") to sfs_core.c and replaced memcpy with field-by-field copying
+  - Status: STILL FAILING despite commit 9eb1fa0 claiming to fix it
+  - Root cause: Original "fix" was ineffective, GCC SIMD prevention didn't resolve the core issue
   - Files modified: `src/fs/sfs/sfs_core.c`, `tools/build/arch-arm64.mk`
+  - Reality: Bug persists on all commits including the supposed fix
+  - Action needed: Re-investigate root cause, current workaround is to use RAMFS only
   - Testing: ✅ VERIFIED - 17/20 tests pass (85% success), only memory-related failures remain
 - [x] **Fix SFS stack corruption crash** - ✅ FIXED (Oct 4, 2025)
   - Files modified: `src/arch/arm64/interrupts/vectors.S`, `src/fs/sfs/sfs_core.c`, `src/kernel/exceptions.c`
@@ -293,7 +295,7 @@ Quick action items organized by priority and timeframe.
 | 2 | ✅ Fixed | Block Device | Registration crashes | ✅ FIXED (Oct 2025) |
 | 3 | ✅ Fixed | VFS | Relative paths fail | ✅ FIXED (Oct 2025) |
 | 4 | ✅ Fixed | SFS | SIMD vectorization crash (PC: 0x600003C5) | ✅ FIXED (Oct 2025) |
-| 5 | ✅ Fixed | SFS | Page fault after mounting SFS then `cd /sfs` | ✅ FIXED (Oct 2025) |
+| 5 | 🔴 Critical | SFS | Page fault after mounting SFS then `cd /sfs` | ❌ UNFIXED (Bug in documentation) |
 | 6 | ✅ Fixed | SFS | System hangs at RAM disk creation | ✅ FIXED (Oct 2025) |
 | 7 | 🟢 Medium | Shell | Directory navigation edge cases | Testing |
 | 8 | 🟢 Medium | Shell | Limited command history | Workaround exists |

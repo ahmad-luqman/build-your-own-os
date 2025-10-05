@@ -95,8 +95,8 @@ int parse_command_line(const char *input, struct command_line *cmd)
             break;
         } else if (cmd->arguments[i][0] == '|') {
             // Basic pipe support: split command at pipe
-            // For now, just detect and report (full implementation later)
-            shell_printf("Pipe detected but not yet fully implemented\n");
+            shell_printf("Basic pipe detected: %s | ...\n", cmd->command);
+            // For now, just report detection - full implementation next
             break;
         }
     }
@@ -189,9 +189,14 @@ int execute_builtin_command(struct shell_context *ctx, struct command_line *cmd)
     // Validate argument count, considering input/output redirection
     int effective_min_args = shell_cmd->min_args;
     
-    // Special case for cat: if input redirection is active, reduce min_args requirement
-    if (strcmp(cmd->command, "cat") == 0 && (cmd->input_redirect || ctx->input_redirect_file)) {
-        effective_min_args = 0;  // cat < file doesn't need additional arguments
+    // Special case: if input redirection is active, some commands don't need additional arguments
+    if (ctx->input_redirect_file && (
+        strcmp(cmd->command, "cat") == 0 ||
+        strcmp(cmd->command, "wc") == 0 ||
+        strcmp(cmd->command, "head") == 0 ||
+        strcmp(cmd->command, "tail") == 0
+    )) {
+        effective_min_args = 0;  // These commands can work without filename when input is redirected
     }
     
     if (effective_min_args >= 0 && cmd->argument_count - 1 < effective_min_args) {

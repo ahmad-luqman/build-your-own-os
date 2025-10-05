@@ -290,6 +290,7 @@ int cmd_cat(struct shell_context *ctx, int argc, char *argv[])
         shell_print_error("Cannot open file: ");
         shell_print_error(full_path);
         shell_print_error("\n");
+        shell_print_error("Hint: Check if the file exists with 'ls' or create it with 'touch'\n");
         return SHELL_ENOENT;
     }
     
