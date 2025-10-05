@@ -11,6 +11,11 @@
 #include "sfs.h"
 #include <string.h>
 
+// Disable optimizations for this entire file to prevent SIMD generation
+#pragma GCC push_options
+#pragma GCC optimize ("-O0")
+#pragma GCC target ("general-regs-only")
+
 // Helper functions to prevent GCC vectorization bugs
 // These functions use memcpy to avoid structure assignment optimizations
 // that can cause stack corruption with SIMD instructions
