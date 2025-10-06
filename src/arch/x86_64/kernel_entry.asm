@@ -8,7 +8,7 @@
 %define MEMORY_MAP_ENTRY_SIZE 24
 
 %define STACK32_SIZE_BYTES 4096
-%define STACK64_SIZE_BYTES 4096
+%define STACK64_SIZE_BYTES 16384  ; Increased from 4KB to 16KB for deep call stacks
 
 section .multiboot
 align 8
@@ -100,9 +100,9 @@ setup_page_tables:
     mov al, '1'
     out dx, al
 
-    ; Zero tables (5 tables now: PML4, PDPT, PD, PT_KERNEL, PT_KERNEL2)
+    ; Zero tables (7 tables now: PML4, PDPT, PD, PT_KERNEL, PT_KERNEL2, PT_KERNEL3, PT_KERNEL4)
     mov edi, pml4_table
-    mov ecx, (4096 * 5) / 4
+    mov ecx, (4096 * 7) / 4
     xor eax, eax
     rep stosd
 
@@ -125,7 +125,9 @@ setup_page_tables:
 
     ; PD[0] -> PT_KERNEL (first 2MB, contains kernel at 1MB)
     ; PD[1] -> PT_KERNEL2 (next 2MB, contains .data/.bss sections)
-    ; This gives us fine-grained 4KB control over kernel region (0-4MB)
+    ; PD[2] -> PT_KERNEL3 (next 2MB, extends BSS coverage)
+    ; PD[3] -> PT_KERNEL4 (next 2MB, provides headroom)
+    ; This gives us fine-grained 4KB control over kernel region (0-8MB)
     mov eax, pt_kernel
     or eax, 0x3                     ; Present + Writable
     mov [pd_table], eax
@@ -136,14 +138,24 @@ setup_page_tables:
     mov [pd_table + 8], eax
     mov dword [pd_table + 12], 0
 
+    mov eax, pt_kernel3
+    or eax, 0x3                     ; Present + Writable
+    mov [pd_table + 16], eax
+    mov dword [pd_table + 20], 0
+
+    mov eax, pt_kernel4
+    or eax, 0x3                     ; Present + Writable
+    mov [pd_table + 24], eax
+    mov dword [pd_table + 28], 0
+
     ; Debug: Mapping 4KB pages
     mov dx, 0xE9
     mov al, '3'
     out dx, al
 
-    ; Map first 4MB using 4KB pages via PT_KERNEL and PT_KERNEL2
-    ; This covers 0x000000 - 0x400000 (includes kernel + data + bss)
-    mov ecx, 1024                   ; 1024 entries * 4KB = 4MB
+    ; Map first 8MB using 4KB pages via PT_KERNEL through PT_KERNEL4
+    ; This covers 0x000000 - 0x800000 (includes all kernel sections + headroom)
+    mov ecx, 2048                   ; 2048 entries * 4KB = 8MB
     xor eax, eax
 .map_4kb_loop:
     mov edx, eax
@@ -151,9 +163,27 @@ setup_page_tables:
     mov ebx, edx
     or ebx, 0x03                    ; Present + Writable (4KB pages)
 
-    ; First 512 entries go to PT_KERNEL, next 512 to PT_KERNEL2
+    ; Distribute across 4 page tables (512 entries each)
     cmp eax, 512
     jl .first_table
+    cmp eax, 1024
+    jl .second_table
+    cmp eax, 1536
+    jl .third_table
+    ; PT_KERNEL4 (entries 1536-2047)
+    mov esi, eax
+    sub esi, 1536
+    mov [pt_kernel4 + esi*8], ebx
+    mov dword [pt_kernel4 + esi*8 + 4], 0
+    jmp .next_entry
+.third_table:
+    ; PT_KERNEL3 (entries 1024-1535)
+    mov esi, eax
+    sub esi, 1024
+    mov [pt_kernel3 + esi*8], ebx
+    mov dword [pt_kernel3 + esi*8 + 4], 0
+    jmp .next_entry
+.second_table:
     ; PT_KERNEL2 (entries 512-1023)
     mov esi, eax
     sub esi, 512
@@ -166,7 +196,7 @@ setup_page_tables:
     mov dword [pt_kernel + eax*8 + 4], 0
 .next_entry:
     inc eax
-    cmp eax, 1024
+    cmp eax, 2048
     jl .map_4kb_loop
 
     ; Debug: Mapping 2MB pages
@@ -174,9 +204,9 @@ setup_page_tables:
     mov al, '4'
     out dx, al
 
-    ; Map 4MB-1GB using 2MB pages (entries 2-511 in PD)
-    mov ecx, 510                    ; 510 entries (skip entries 0-1, already mapped)
-    mov eax, 2                      ; Start at index 2
+    ; Map 8MB-1GB using 2MB pages (entries 4-511 in PD)
+    mov ecx, 508                    ; 508 entries (skip entries 0-3, already mapped)
+    mov eax, 4                      ; Start at index 4
 .map_2mb_loop:
     mov edx, eax
     shl edx, 21                     ; Physical address = index * 2MB
@@ -196,9 +226,17 @@ setup_page_tables:
     ret
 
 enable_paging:
-    ; Enable PAE
+    ; Enable SSE (required for -O2 compiled code)
+    ; SSE instructions (movaps, movdqa, etc.) require this setup
+    mov eax, cr0
+    and ax, 0xFFFB      ; Clear CR0.EM (bit 2) - disable x87 emulation
+    or ax, 0x2          ; Set CR0.MP (bit 1) - monitor coprocessor
+    mov cr0, eax
+
     mov eax, cr4
-    or eax, 1 << 5
+    or eax, (1 << 9)    ; Set CR4.OSFXSR (bit 9) - enable FXSAVE/FXRSTOR
+    or eax, (1 << 10)   ; Set CR4.OSXMMEXCPT (bit 10) - enable unmasked SSE exceptions
+    or eax, (1 << 5)    ; Set CR4.PAE (bit 5) - enable PAE
     mov cr4, eax
 
     ; Load PML4
@@ -336,6 +374,12 @@ pt_kernel:
     resb 4096
 align 4096
 pt_kernel2:
+    resb 4096
+align 4096
+pt_kernel3:
+    resb 4096
+align 4096
+pt_kernel4:
     resb 4096
 
 align 16
