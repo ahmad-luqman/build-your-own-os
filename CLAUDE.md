@@ -6,6 +6,143 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 MiniOS is an educational operating system project supporting ARM64 and x86-64 architectures. The project follows a phased development approach with 7 main phases, currently at Phase 5 completion (File System Implementation). This is a learning OS designed to demonstrate core OS concepts clearly.
 
+## GitHub Project Management
+
+### Project Information
+- **GitHub Project**: #9 (https://github.com/users/ahmad-luqman/projects/9)
+- **Repository**: ahmad-luqman/build-your-own-os
+- **Issue Tracking**: All development tasks are tracked as GitHub issues with labels
+- **Milestones**: Phase-based milestones for tracking progress
+
+### Essential gh CLI Commands
+
+#### View Project Status
+```bash
+# Quick dashboard view
+./project_dashboard.sh
+
+# Detailed status
+./project_status.sh
+
+# List all issues
+gh issue list --repo ahmad-luqman/build-your-own-os
+
+# List high priority issues
+gh issue list --label "high-priority" --state open
+
+# List bugs
+gh issue list --label "bug" --state open
+```
+
+#### Working with Issues
+```bash
+# Create a new issue
+gh issue create --title "Title" --body "Description" --label "bug,shell,high-priority"
+
+# View an issue
+gh issue view <number>
+
+# Edit an issue (add labels)
+gh issue edit <number> --add-label "in-progress"
+
+# Assign issue to yourself
+gh issue edit <number> --add-assignee @me
+
+# Close an issue when complete
+gh issue close <number> --comment "Fixed in commit <hash>"
+
+# Reopen an issue
+gh issue reopen <number>
+```
+
+#### Project Management
+```bash
+# Add issue to project
+gh project item-add 9 --owner ahmad-luqman --url https://github.com/ahmad-luqman/build-your-own-os/issues/<number>
+
+# View project
+open https://github.com/users/ahmad-luqman/projects/9
+```
+
+### Label System
+Issues are organized with the following labels:
+
+**Priority Labels:**
+- `high-priority` - Critical issues needing immediate attention
+- `medium-priority` - Important but not urgent
+- `low-priority` - Nice to have improvements
+
+**Type Labels:**
+- `bug` - Something isn't working
+- `feature` - New functionality
+- `enhancement` - Improvements to existing features
+- `documentation` - Documentation updates
+- `testing` - Test-related tasks
+
+**Component Labels:**
+- `shell` - Shell/CLI related
+- `sfs` - SFS filesystem
+- `memory` - Memory management
+- `performance` - Performance optimizations
+
+**Phase Labels:**
+- `phase-5` - File System
+- `phase-6` - User Interface
+- `phase-7` - Polish & Documentation
+
+### Current High Priority Issues
+
+When starting work, check these first:
+1. **Bug Issues** - Always fix bugs before adding features
+2. **High Priority Features** - Critical functionality needed
+3. **Test Failures** - Keep tests passing
+
+Use: `gh issue list --label "bug" --state open` or `./project_dashboard.sh`
+
+### Development Workflow
+
+1. **Starting Work on an Issue:**
+   ```bash
+   # Pick an issue
+   gh issue list --label "bug" --state open
+
+   # Assign to yourself
+   gh issue edit <number> --add-assignee @me
+
+   # Add in-progress label
+   gh issue edit <number> --add-label "in-progress"
+
+   # Create a branch (optional)
+   git checkout -b issue-<number>-description
+   ```
+
+2. **During Development:**
+   ```bash
+   # Comment on progress
+   gh issue comment <number> --body "Working on fix, found that..."
+
+   # Link commits by mentioning issue
+   git commit -m "Fix: Description (#<number>)"
+   ```
+
+3. **Completing an Issue:**
+   ```bash
+   # Close with comment
+   gh issue close <number> --comment "Fixed in commit <hash>"
+
+   # Or close via commit message
+   git commit -m "Fixes #<number>: Description"
+   ```
+
+### Project Scripts
+
+The following helper scripts are available:
+
+- **`./project_dashboard.sh`** - Visual dashboard of project status
+- **`./project_status.sh`** - Detailed status report
+- **`./setup_github_labels.sh`** - Create/update labels (only run once)
+- **`./setup_github_project.sh`** - Initial project setup (already complete)
+
 ## Build Commands
 
 ### Basic Build Operations
@@ -120,11 +257,25 @@ The build system automatically selects appropriate toolchains:
 - VFS abstraction layer supporting multiple file systems
 - SFS (Simple File System) implementation
 - Block device abstraction for storage
+- **IMPORTANT**: RAMFS is mounted at `/` (root), not `/ramfs`
 
 ### Process Management
 - Round-robin scheduling with priority levels
 - Preemptive multitasking via timer interrupts
 - Process structures with virtual memory spaces
+
+## Known Issues and Bugs
+
+### Current Bugs (Check GitHub for latest)
+1. **Tab Completion Cursor Bug** (#1) - `ec[TAB]` produces `ccho` instead of `echo`
+2. **Smoke Test Mount Path** (#2) - Tests expect `/ramfs` but RAMFS is mounted at `/`
+
+### Working Features
+- ✅ File operations: touch, cat, echo > file, ls, pwd, cd
+- ✅ mv command (rename/move files)
+- ✅ cp command (copy files)
+- ✅ Basic tab completion (with known cursor bug)
+- ✅ Directory operations on RAMFS
 
 ## Debugging and Development Tips
 
@@ -151,14 +302,24 @@ Use `make DEBUG=1` for:
 ### Commit Message Standards
 - **DO NOT** add any Claude Code attribution or signatures in commit messages
 - Write clear, descriptive commit messages following conventional commit format
+- Reference issues: `Fixes #<number>` or `Related to #<number>`
 - Focus on what was changed and why, not who made the change
 - Examples of good commit messages:
-  - "Add pipe detection to shell parser"
-  - "Fix SFS page fault by disabling SIMD optimizations"
-  - "Update build configuration for ARM64 cross-compilation"
+  - "Fix: Tab completion cursor position for unique matches (#1)"
+  - "Feature: Add SFS file write support (#5)"
+  - "Test: Update smoke test for correct RAMFS mount path (#2)"
 
 ### Development Principles
 - Prioritize system stability and avoid breaking existing functionality
 - Use test-driven development approach when implementing new features
 - Test on both ARM64 and x86-64 architectures when applicable
 - Maintain clean, readable code with proper documentation
+- Always check high-priority bugs before adding new features
+
+### Before Starting Work
+1. Run `./project_dashboard.sh` to see current priorities
+2. Check for assigned issues: `gh issue list --assignee @me`
+3. Look for bugs first: `gh issue list --label "bug" --state open`
+4. Ensure tests pass: `make test`
+
+      IMPORTANT: this context may or may not be relevant to your tasks. You should not respond to this context unless it is highly relevant to your task.
