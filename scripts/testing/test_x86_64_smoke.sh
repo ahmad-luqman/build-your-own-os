@@ -137,18 +137,33 @@ run_test() {
     log "Log file: $LOG_FILE"
 
     local exit_code=0
+    local debug_log="$BUILD_DIR/x86_64_debug_${TIMESTAMP}.log"
+    local serial_log="$BUILD_DIR/x86_64_serial_${TIMESTAMP}.log"
+
     # Use GRUB-based ISO (x86-64 requires bootloader unlike ARM64)
+    # Capture both debug console (0xE9) and serial output
     if timeout "$TIMEOUT" qemu-system-x86_64 \
         -m 512M \
         -cdrom "$ISO_FILE" \
         -boot d \
         -nographic \
-        -serial mon:stdio \
-        < "$COMMANDS_FILE" 2>&1 | tee "$LOG_FILE"; then
+        -debugcon file:"$debug_log" \
+        -serial file:"$serial_log" \
+        < "$COMMANDS_FILE" 2>&1; then
         exit_code=$?
     else
         exit_code=$?
     fi
+
+    # Merge debug and serial output into main log
+    {
+        if [ -f "$debug_log" ]; then
+            cat "$debug_log"
+        fi
+        if [ -f "$serial_log" ]; then
+            cat "$serial_log"
+        fi
+    } | tee "$LOG_FILE"
 
     if [ $exit_code -eq 124 ]; then
         warn "Test timed out after ${TIMEOUT}s"
