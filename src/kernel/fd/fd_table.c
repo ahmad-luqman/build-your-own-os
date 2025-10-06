@@ -35,7 +35,20 @@ int fd_init(void)
     
     // Use memset to zero the entire structure - safe and optimized
     early_print("FD init: Zeroing FD table...\n");
+#ifdef __x86_64__
+    // TEMPORARY FIX for Issue #18: Manual zeroing to debug memset crash
+    early_print("FD init: Manual byte-by-byte zeroing (x86-64)...\n");
+    char *ptr = (char *)current_fd_table;
+    for (size_t i = 0; i < sizeof(struct fd_table); i++) {
+        if (i % 100 == 0) {
+            early_print(".");  // Progress indicator every 100 bytes
+        }
+        ptr[i] = 0;
+    }
+    early_print("\n");
+#else
     memset(current_fd_table, 0, sizeof(struct fd_table));
+#endif
     early_print("FD init: FD table zeroed\n");
     
     // Set initial values
