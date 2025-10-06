@@ -47,8 +47,18 @@ char *strncpy(char *dest, const char *src, size_t n)
 {
     if (!dest || !src) return dest;
     char *orig_dest = dest;
-    while (n-- && (*dest++ = *src++));
-    while (n-- > 0) *dest++ = '\0';
+    size_t i;
+
+    // Copy up to n characters from src to dest
+    for (i = 0; i < n && src[i] != '\0'; i++) {
+        dest[i] = src[i];
+    }
+
+    // Pad with null bytes if needed
+    for (; i < n; i++) {
+        dest[i] = '\0';
+    }
+
     return orig_dest;
 }
 
