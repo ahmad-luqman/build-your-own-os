@@ -6,6 +6,45 @@
 #include "shell.h"
 #include "kernel.h"
 
+static unsigned int pipe_sequence = 0;
+
+static void build_pipe_temp_path(char *buffer, size_t size)
+{
+    const char prefix[] = "/tmp/pipe_";
+    int prefix_len = strlen(prefix);
+
+    if (!buffer || size == 0) {
+        return;
+    }
+
+    if ((int)size <= prefix_len + 1) {
+        buffer[0] = '\0';
+        return;
+    }
+
+    strcpy(buffer, prefix);
+    int pos = prefix_len;
+
+    unsigned int id = pipe_sequence++;
+    char digits[10];
+    int digit_count = 0;
+
+    if (id == 0) {
+        digits[digit_count++] = '0';
+    } else {
+        while (id > 0 && digit_count < (int)sizeof(digits)) {
+            digits[digit_count++] = (char)('0' + (id % 10));
+            id /= 10;
+        }
+    }
+
+    while (digit_count > 0 && pos < (int)size - 1) {
+        buffer[pos++] = digits[--digit_count];
+    }
+
+    buffer[pos] = '\0';
+}
+
 // Parse command line into structured format
 int parse_command_line(const char *input, struct command_line *cmd)
 {
@@ -94,9 +133,7 @@ int parse_command_line(const char *input, struct command_line *cmd)
             cmd->argument_count--;
             break;
         } else if (cmd->arguments[i][0] == '|') {
-            // Basic pipe support: split command at pipe
-            shell_printf("Basic pipe detected: %s | ...\n", cmd->command);
-            // For now, just report detection - full implementation next
+            // Pipe segments handled during execution phase
             break;
         }
     }
@@ -110,7 +147,65 @@ int execute_command(struct shell_context *ctx, struct command_line *cmd)
     if (!ctx || !cmd || !cmd->command) {
         return SHELL_EINVAL;
     }
-    
+
+    // Detect basic pipes (cmd1 | cmd2) and execute via temporary files
+    int pipe_index = -1;
+    for (int i = 1; i < cmd->argument_count; i++) {
+        if (cmd->arguments[i] && cmd->arguments[i][0] == '|' && cmd->arguments[i][1] == '\0') {
+            pipe_index = i;
+            break;
+        }
+    }
+
+    if (pipe_index != -1) {
+        // Ensure both sides of the pipe have commands
+        if (pipe_index == 0 || pipe_index >= cmd->argument_count - 1) {
+            shell_print_error("Invalid pipe syntax\n");
+            return SHELL_EINVAL;
+        }
+
+        if (!cmd->arguments[pipe_index + 1] || cmd->arguments[pipe_index + 1][0] == '\0') {
+            shell_print_error("Missing command after pipe\n");
+            return SHELL_EINVAL;
+        }
+
+        // Temporary file bridge for the pipe
+        char temp_file[64];
+        build_pipe_temp_path(temp_file, sizeof(temp_file));
+
+        // Prepare left command (before pipe) to write into temp file
+        struct command_line left_cmd = *cmd;
+        left_cmd.argument_count = pipe_index;
+        left_cmd.output_redirect = temp_file;
+        left_cmd.output_append = 0;
+        left_cmd.pipe_next = NULL;
+
+        // Ensure argument array terminates for the left command
+        cmd->arguments[pipe_index] = NULL;
+
+        // Prepare right command (after pipe) to read from temp file
+        struct command_line right_cmd;
+        memset(&right_cmd, 0, sizeof(right_cmd));
+        right_cmd.command = cmd->arguments[pipe_index + 1];
+        right_cmd.arguments = &cmd->arguments[pipe_index + 1];
+        right_cmd.argument_count = cmd->argument_count - pipe_index - 1;
+        right_cmd.input_redirect = temp_file;
+        right_cmd.output_redirect = cmd->output_redirect;
+        right_cmd.output_append = cmd->output_append;
+        right_cmd.background = cmd->background;
+        right_cmd.pipe_next = NULL;
+
+        int result1 = execute_command(ctx, &left_cmd);
+        if (result1 != SHELL_SUCCESS) {
+            vfs_unlink(temp_file);
+            return result1;
+        }
+
+        int result2 = execute_command(ctx, &right_cmd);
+        vfs_unlink(temp_file);
+        return result2;
+    }
+
     // Store output redirection in context so commands can access it
     // Save the original values
     char *saved_output_redirect = ctx->output_redirect_file;
