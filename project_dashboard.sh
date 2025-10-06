@@ -5,6 +5,9 @@
 REPO="ahmad-luqman/build-your-own-os"
 PROJECT_NUMBER=9
 
+# Disable pager for all gh commands
+export PAGER=cat
+
 clear
 echo "╔════════════════════════════════════════════════════════════════════════╗"
 echo "║                    MiniOS Development Dashboard                         ║"
