@@ -100,9 +100,9 @@ setup_page_tables:
     mov al, '1'
     out dx, al
 
-    ; Zero tables (4 tables now: PML4, PDPT, PD, PT_KERNEL)
+    ; Zero tables (5 tables now: PML4, PDPT, PD, PT_KERNEL, PT_KERNEL2)
     mov edi, pml4_table
-    mov ecx, (4096 * 4) / 4
+    mov ecx, (4096 * 5) / 4
     xor eax, eax
     rep stosd
 
@@ -124,30 +124,49 @@ setup_page_tables:
     mov dword [pdpt_table + 4], 0
 
     ; PD[0] -> PT_KERNEL (first 2MB, contains kernel at 1MB)
-    ; This gives us fine-grained 4KB control over kernel region
+    ; PD[1] -> PT_KERNEL2 (next 2MB, contains .data/.bss sections)
+    ; This gives us fine-grained 4KB control over kernel region (0-4MB)
     mov eax, pt_kernel
     or eax, 0x3                     ; Present + Writable
     mov [pd_table], eax
     mov dword [pd_table + 4], 0
+
+    mov eax, pt_kernel2
+    or eax, 0x3                     ; Present + Writable
+    mov [pd_table + 8], eax
+    mov dword [pd_table + 12], 0
 
     ; Debug: Mapping 4KB pages
     mov dx, 0xE9
     mov al, '3'
     out dx, al
 
-    ; Map first 2MB using 4KB pages via PT_KERNEL
-    ; This covers 0x000000 - 0x200000 (includes kernel at 0x100000)
-    mov ecx, 512                    ; 512 entries * 4KB = 2MB
+    ; Map first 4MB using 4KB pages via PT_KERNEL and PT_KERNEL2
+    ; This covers 0x000000 - 0x400000 (includes kernel + data + bss)
+    mov ecx, 1024                   ; 1024 entries * 4KB = 4MB
     xor eax, eax
 .map_4kb_loop:
     mov edx, eax
     shl edx, 12                     ; Physical address = index * 4KB
     mov ebx, edx
     or ebx, 0x03                    ; Present + Writable (4KB pages)
+
+    ; First 512 entries go to PT_KERNEL, next 512 to PT_KERNEL2
+    cmp eax, 512
+    jl .first_table
+    ; PT_KERNEL2 (entries 512-1023)
+    mov esi, eax
+    sub esi, 512
+    mov [pt_kernel2 + esi*8], ebx
+    mov dword [pt_kernel2 + esi*8 + 4], 0
+    jmp .next_entry
+.first_table:
+    ; PT_KERNEL (entries 0-511)
     mov [pt_kernel + eax*8], ebx
     mov dword [pt_kernel + eax*8 + 4], 0
+.next_entry:
     inc eax
-    cmp eax, 512
+    cmp eax, 1024
     jl .map_4kb_loop
 
     ; Debug: Mapping 2MB pages
@@ -155,9 +174,9 @@ setup_page_tables:
     mov al, '4'
     out dx, al
 
-    ; Map 2MB-1GB using 2MB pages (entries 1-511 in PD)
-    mov ecx, 511                    ; 511 entries (skip entry 0, already mapped)
-    mov eax, 1                      ; Start at index 1
+    ; Map 4MB-1GB using 2MB pages (entries 2-511 in PD)
+    mov ecx, 510                    ; 510 entries (skip entries 0-1, already mapped)
+    mov eax, 2                      ; Start at index 2
 .map_2mb_loop:
     mov edx, eax
     shl edx, 21                     ; Physical address = index * 2MB
@@ -314,6 +333,9 @@ pd_table:
     resb 4096
 align 4096
 pt_kernel:
+    resb 4096
+align 4096
+pt_kernel2:
     resb 4096
 
 align 16
