@@ -181,8 +181,6 @@ struct alloc_entry {
     uint32_t timestamp;  // Simple counter
 };
 
-#ifndef __x86_64__
-// TEMPORARY: Disable tracking structures on x86-64 due to Issue #18
 static struct alloc_entry alloc_table[MAX_ALLOC_TRACKING];
 static uint32_t alloc_timestamp = 0;
 
@@ -227,10 +225,8 @@ static int get_subsystem_index(const char *file) {
 
     return 6;  // Other
 }
-#endif  // !__x86_64__
 
 // Helper: Record allocation in tracking table
-#ifndef __x86_64__
 static void record_allocation(void *ptr, size_t size, const char *file, int line) {
     for (int i = 0; i < MAX_ALLOC_TRACKING; i++) {
         if (alloc_table[i].ptr == NULL) {
@@ -251,10 +247,8 @@ static void record_allocation(void *ptr, size_t size, const char *file, int line
     }
     // Tracking table full - allocation still succeeds but not tracked
 }
-#endif  // !__x86_64__
 
 // Helper: Remove allocation from tracking table
-#ifndef __x86_64__
 static void unrecord_allocation(void *ptr) {
     for (int i = 0; i < MAX_ALLOC_TRACKING; i++) {
         if (alloc_table[i].ptr == ptr) {
@@ -272,68 +266,24 @@ static void unrecord_allocation(void *ptr) {
         }
     }
 }
-#endif  // !__x86_64__
 
 #ifdef KMALLOC_DEBUG
 void *kmalloc_debug(size_t size, const char *file, int line) {
 #else
 void *kmalloc(size_t size) {
-#ifndef __x86_64__
     const char *file = NULL;
     int line = 0;
-#else
-    // x86-64: Skip tracking variables (unused due to temp fix for Issue #18)
-    (void)0;  // Placeholder
-#endif
-#endif
-#ifdef __x86_64__
-    early_print("kmalloc: Entry, size=");
-    char size_buf[16];
-    int len = 0;
-    size_t temp = size;
-    if (temp == 0) {
-        size_buf[len++] = '0';
-    } else {
-        char temp_buf[16];
-        int temp_len = 0;
-        while (temp > 0 && temp_len < 15) {
-            temp_buf[temp_len++] = '0' + (temp % 10);
-            temp /= 10;
-        }
-        for (int i = temp_len - 1; i >= 0; i--) {
-            size_buf[len++] = temp_buf[i];
-        }
-    }
-    size_buf[len] = '\0';
-    early_print(size_buf);
-    early_print("\n");
 #endif
 
     // Simple bump allocator with better tracking
     if (size == 0) {
-#ifdef __x86_64__
-        early_print("kmalloc: Size is 0, returning NULL\n");
-#endif
         return NULL;
     }
 
-#ifdef __x86_64__
-    early_print("kmalloc: Aligning size...\n");
-#endif
     // Align requested size and heap pointer so we can safely satisfy
     // callers that issue 128-bit accesses (e.g. NEON stores emitted by GCC).
     size = (size + (KMALLOC_ALIGNMENT - 1)) & ~(size_t)(KMALLOC_ALIGNMENT - 1);
-#ifdef __x86_64__
-    early_print("kmalloc: Aligned size calculated\n");
-
-    early_print("kmalloc: Calculating aligned_offset...\n");
-#endif
     size_t aligned_offset = (heap_offset + (KMALLOC_ALIGNMENT - 1)) & ~(size_t)(KMALLOC_ALIGNMENT - 1);
-#ifdef __x86_64__
-    early_print("kmalloc: aligned_offset calculated\n");
-
-    early_print("kmalloc: Checking heap space...\n");
-#endif
     if (aligned_offset + size > sizeof(simple_heap)) {
         early_print("kmalloc: OUT OF MEMORY - ");
         // Print usage statistics for debugging
@@ -371,24 +321,9 @@ void *kmalloc(size_t size) {
         return NULL;  // Out of memory
     }
 
-#ifdef __x86_64__
-    early_print("kmalloc: Computing heap pointer address...\n");
-#endif
     void *ptr = &simple_heap[aligned_offset];
-#ifdef __x86_64__
-    early_print("kmalloc: Heap pointer computed\n");
-
-    early_print("kmalloc: Updating heap_offset...\n");
-#endif
     heap_offset = aligned_offset + size;
-#ifdef __x86_64__
-    early_print("kmalloc: heap_offset updated\n");
 
-    early_print("kmalloc: Skipping statistics updates on x86-64 (TEMP FIX)\n");
-    // TEMPORARY FIX for Issue #18: Skip statistics updates on x86-64
-    // Root cause: static struct access causes page fault/triple fault
-    // TODO: Investigate why .data/.bss section writes fail on x86-64
-#else
     // Update statistics
     kmalloc_stats.total_allocations++;
     kmalloc_stats.total_bytes_allocated += size;
@@ -396,22 +331,9 @@ void *kmalloc(size_t size) {
     if (kmalloc_stats.current_usage > kmalloc_stats.peak_usage) {
         kmalloc_stats.peak_usage = kmalloc_stats.current_usage;
     }
-#endif
 
-#ifdef __x86_64__
-    early_print("kmalloc: Skipping allocation tracking on x86-64 (TEMP FIX)\n");
-    // TEMPORARY FIX: Skip record_allocation which also writes to static arrays
-#else
     // Track allocation for leak detection
     record_allocation(ptr, size, file, line);
-#endif
-
-    // Debug output with address (simplified)
-#ifdef __x86_64__
-    early_print("kmalloc: Returning pointer\n");
-#else
-    early_print("kmalloc: OK\n");
-#endif
 
     return ptr;
 }
@@ -426,10 +348,8 @@ void kfree(void *ptr) {
     // Simple allocator doesn't support freeing individual blocks
     // In a real implementation, this would maintain a free list
 
-#ifndef __x86_64__
     // Remove from tracking table (even though we don't actually free)
     unrecord_allocation(ptr);
-#endif
 
     (void)ptr;  // Suppress warning
 }
@@ -445,7 +365,6 @@ int memory_allocator_is_ready(void) {
  * Get memory allocation statistics for debugging
  */
 void memory_get_alloc_stats(void) {
-#ifndef __x86_64__
     early_print("=== Memory Allocation Statistics ===\n");
     early_print("Total allocations: ");
     // Simple number printing (avoiding printf dependencies)
@@ -512,18 +431,12 @@ void memory_get_alloc_stats(void) {
     }
     early_print(" bytes\n");
     early_print("===================================\n");
-#else
-    early_print("=== Memory Allocation Statistics ===\n");
-    early_print("(Not available on x86-64 - see Issue #18)\n");
-    early_print("===================================\n");
-#endif
 }
 
 /**
  * Check for memory leaks and report them
  */
 void memory_leak_check(void) {
-#ifndef __x86_64__
     early_print("\n=== Memory Leak Detection ===\n");
 
     int leak_count = 0;
@@ -602,18 +515,12 @@ void memory_leak_check(void) {
     buf2[len2] = '\0';
     early_print(buf2);
     early_print("\n===========================\n\n");
-#else
-    early_print("\n=== Memory Leak Detection ===\n");
-    early_print("(Not available on x86-64 - see Issue #18)\n");
-    early_print("===========================\n\n");
-#endif
 }
 
 /**
  * Show all active allocations (for debugging)
  */
 void memory_show_allocations(void) {
-#ifndef __x86_64__
     early_print("\n=== Active Allocations ===\n");
 
     int shown = 0;
@@ -694,18 +601,12 @@ void memory_show_allocations(void) {
     }
 
     early_print("========================\n\n");
-#else
-    early_print("\n=== Active Allocations ===\n");
-    early_print("(Not available on x86-64 - see Issue #18)\n");
-    early_print("========================\n\n");
-#endif
 }
 
 /**
  * Show per-subsystem memory statistics
  */
 void memory_subsystem_stats(void) {
-#ifndef __x86_64__
     early_print("\n=== Subsystem Memory Usage ===\n");
 
     for (int i = 0; i < 7; i++) {
@@ -758,9 +659,4 @@ void memory_subsystem_stats(void) {
     }
 
     early_print("============================\n\n");
-#else
-    early_print("\n=== Subsystem Memory Usage ===\n");
-    early_print("(Not available on x86-64 - see Issue #18)\n");
-    early_print("============================\n\n");
-#endif
 }

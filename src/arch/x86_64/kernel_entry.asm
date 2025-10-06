@@ -95,36 +95,84 @@ check_long_mode:
     jmp .no_long
 
 setup_page_tables:
-    ; Zero tables
+    ; Debug: Starting page table setup
+    mov dx, 0xE9
+    mov al, '1'
+    out dx, al
+
+    ; Zero tables (4 tables now: PML4, PDPT, PD, PT_KERNEL)
     mov edi, pml4_table
-    mov ecx, (4096 * 3) / 4
+    mov ecx, (4096 * 4) / 4
     xor eax, eax
     rep stosd
 
-    ; PML4[0] -> PDP
+    ; Debug: Tables zeroed
+    mov dx, 0xE9
+    mov al, '2'
+    out dx, al
+
+    ; PML4[0] -> PDPT
     mov eax, pdpt_table
-    or eax, 0x3
+    or eax, 0x3                     ; Present + Writable
     mov [pml4_table], eax
     mov dword [pml4_table + 4], 0
 
-    ; PDP[0] -> PD (1GB)
+    ; PDPT[0] -> PD (first 1GB)
     mov eax, pd_table
-    or eax, 0x3
+    or eax, 0x3                     ; Present + Writable
     mov [pdpt_table], eax
     mov dword [pdpt_table + 4], 0
 
-    ; Map first 1GB using 2MB pages
-    mov ecx, 512
+    ; PD[0] -> PT_KERNEL (first 2MB, contains kernel at 1MB)
+    ; This gives us fine-grained 4KB control over kernel region
+    mov eax, pt_kernel
+    or eax, 0x3                     ; Present + Writable
+    mov [pd_table], eax
+    mov dword [pd_table + 4], 0
+
+    ; Debug: Mapping 4KB pages
+    mov dx, 0xE9
+    mov al, '3'
+    out dx, al
+
+    ; Map first 2MB using 4KB pages via PT_KERNEL
+    ; This covers 0x000000 - 0x200000 (includes kernel at 0x100000)
+    mov ecx, 512                    ; 512 entries * 4KB = 2MB
     xor eax, eax
-.map_loop:
+.map_4kb_loop:
     mov edx, eax
-    shl edx, 21
+    shl edx, 12                     ; Physical address = index * 4KB
     mov ebx, edx
-    or ebx, 0x83
+    or ebx, 0x03                    ; Present + Writable (4KB pages)
+    mov [pt_kernel + eax*8], ebx
+    mov dword [pt_kernel + eax*8 + 4], 0
+    inc eax
+    cmp eax, 512
+    jl .map_4kb_loop
+
+    ; Debug: Mapping 2MB pages
+    mov dx, 0xE9
+    mov al, '4'
+    out dx, al
+
+    ; Map 2MB-1GB using 2MB pages (entries 1-511 in PD)
+    mov ecx, 511                    ; 511 entries (skip entry 0, already mapped)
+    mov eax, 1                      ; Start at index 1
+.map_2mb_loop:
+    mov edx, eax
+    shl edx, 21                     ; Physical address = index * 2MB
+    mov ebx, edx
+    or ebx, 0x83                    ; Present + Writable + Page Size (2MB)
     mov [pd_table + eax*8], ebx
     mov dword [pd_table + eax*8 + 4], 0
     inc eax
-    loop .map_loop
+    cmp eax, 512
+    jl .map_2mb_loop
+
+    ; Debug: Page tables complete
+    mov dx, 0xE9
+    mov al, '5'
+    out dx, al
 
     ret
 
@@ -167,6 +215,15 @@ long_mode_entry:
     ; Debug: Segments loaded
     mov dx, 0xE9
     mov al, 'B'
+    out dx, al
+
+    ; Flush TLB to ensure page tables are properly loaded
+    mov rax, cr3
+    mov cr3, rax
+
+    ; Debug: Page tables configured (4KB kernel pages)
+    mov dx, 0xE9
+    mov al, 'P'
     out dx, al
 
     ; Switch to 64-bit stack
@@ -254,6 +311,9 @@ pdpt_table:
     resb 4096
 align 4096
 pd_table:
+    resb 4096
+align 4096
+pt_kernel:
     resb 4096
 
 align 16
