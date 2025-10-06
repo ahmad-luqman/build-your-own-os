@@ -164,13 +164,17 @@ static void shell_handle_tab_completion(struct shell_context *ctx, int *cursor_p
             return;
         }
 
+        // Replace the word in the buffer
         memcpy(&ctx->command_buffer[word_start], completion, completion_len);
-        pos = word_start + (int)completion_len;
-        ctx->command_buffer[pos] = '\0';
+        int new_pos = word_start + (int)completion_len;
+        ctx->command_buffer[new_pos] = '\0';
 
+        // Only print the characters we're adding (after the prefix)
         if (completion_len > prefix_len) {
             shell_print(completion + prefix_len);
         }
+
+        pos = new_pos;
 
         if ((size_t)pos < SHELL_MAX_COMMAND_LENGTH - 1) {
             ctx->command_buffer[pos] = ' ';
