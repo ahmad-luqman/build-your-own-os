@@ -17,15 +17,15 @@
 static inline void sfs_sync_inode_data_safe(struct sfs_inode *disk_inode, const struct inode *inode)
     __attribute__((always_inline, nonnull));
 static inline void sfs_sync_inode_data_safe(struct sfs_inode *disk_inode, const struct inode *inode) {
-    __asm__ volatile("dmb ish" ::: "memory");
+    mb();
     disk_inode->size = inode->size;
-    __asm__ volatile("dmb ish" ::: "memory");
+    mb();
     disk_inode->blocks = inode->blocks;
-    __asm__ volatile("dmb ish" ::: "memory");
+    mb();
     disk_inode->modified_time = inode->modified_time;
-    __asm__ volatile("dmb ish" ::: "memory");
+    mb();
     disk_inode->accessed_time = inode->accessed_time;
-    __asm__ volatile("dmb ish" ::: "memory");
+    mb();
 }
 
 // SFS file operations
@@ -715,7 +715,7 @@ static struct inode *sfs_allocate_vfs_inode(struct file_system *fs, uint32_t ino
     memset(inode_data, 0, sizeof(struct sfs_inode_data));
 
     // Full memory barrier to prevent compiler reordering
-    __asm__ volatile("dmb ish" ::: "memory");
+    mb();
 
     // Set inode fields
     inode->ino = inode_num;
@@ -730,40 +730,40 @@ static struct inode *sfs_allocate_vfs_inode(struct file_system *fs, uint32_t ino
     inode->ref_count = 1;
 
     // Copy inode data field-by-field to prevent SIMD generation
-    __asm__ volatile("dmb ish" ::: "memory");
+    mb();
     inode_data->disk_inode.mode = disk_inode->mode;
-    __asm__ volatile("dmb ish" ::: "memory");
+    mb();
     inode_data->disk_inode.size = disk_inode->size;
-    __asm__ volatile("dmb ish" ::: "memory");
+    mb();
     inode_data->disk_inode.blocks = disk_inode->blocks;
-    __asm__ volatile("dmb ish" ::: "memory");
+    mb();
     for (int i = 0; i < SFS_DIRECT_BLOCKS; i++) {
         inode_data->disk_inode.direct[i] = disk_inode->direct[i];
     }
-    __asm__ volatile("dmb ish" ::: "memory");
+    mb();
     inode_data->disk_inode.indirect = disk_inode->indirect;
-    __asm__ volatile("dmb ish" ::: "memory");
+    mb();
     inode_data->disk_inode.created_time = disk_inode->created_time;
-    __asm__ volatile("dmb ish" ::: "memory");
+    mb();
     inode_data->disk_inode.modified_time = disk_inode->modified_time;
-    __asm__ volatile("dmb ish" ::: "memory");
+    mb();
     inode_data->disk_inode.accessed_time = disk_inode->accessed_time;
-    __asm__ volatile("dmb ish" ::: "memory");
+    mb();
     inode_data->disk_inode.links = disk_inode->links;
-    __asm__ volatile("dmb ish" ::: "memory");
+    mb();
     inode_data->disk_inode.flags = disk_inode->flags;
-    __asm__ volatile("dmb ish" ::: "memory");
+    mb();
     // Copy reserved field byte-by-byte
     for (size_t i = 0; i < sizeof(disk_inode->reserved); i++) {
         inode_data->disk_inode.reserved[i] = disk_inode->reserved[i];
     }
-    __asm__ volatile("dmb ish" ::: "memory");
+    mb();
     inode_data->inode_num = inode_num;
     inode_data->dirty = 0;
-    __asm__ volatile("dmb ish" ::: "memory");
+    mb();
 
     // Final barrier before return
-    __asm__ volatile("dmb ish" ::: "memory");
+    mb();
 
     return inode;
 }
@@ -906,9 +906,9 @@ struct inode *sfs_alloc_inode(struct file_system *fs, uint32_t mode)
             new_inode.indirect = 0;
 
             // Add memory barrier to prevent GCC vectorization from causing stack corruption
-            __asm__ volatile("dmb ish" ::: "memory");
+            mb();
             inodes[entry] = new_inode;
-            __asm__ volatile("dmb ish" ::: "memory");
+            mb();
 
             if (sfs_write_block(fs, block_num, buffer) != VFS_SUCCESS) {
                 goto out;
@@ -1901,7 +1901,7 @@ static struct inode *sfs_dir_lookup(struct file_system *fs, struct inode *parent
     }
 
     // Memory barrier after allocation
-    __asm__ volatile("dmb ish" ::: "memory");
+    mb();
 
     struct inode *found_inode = NULL;
     
@@ -1929,7 +1929,7 @@ static struct inode *sfs_dir_lookup(struct file_system *fs, struct inode *parent
             if (strncmp(entries[i].name, name, SFS_MAX_NAME) == 0) {
                 found_inode = sfs_get_inode(fs, entries[i].inode);
                 // Memory barrier after getting inode
-                __asm__ volatile("dmb ish" ::: "memory");
+                mb();
                 break;
             }
         }
@@ -1940,7 +1940,7 @@ static struct inode *sfs_dir_lookup(struct file_system *fs, struct inode *parent
     }
 
     // Memory barrier before cleanup and return
-    __asm__ volatile("dmb ish" ::: "memory");
+    mb();
 
     kfree(block_buffer);
     return found_inode;

@@ -9,6 +9,24 @@
 #define READ_ONCE(x) (*(volatile typeof(x) *)&(x))
 #define WRITE_ONCE(x, val) (*(volatile typeof(x) *)&(x) = (val))
 
+// Architecture-specific memory barriers
+#ifdef __aarch64__
+    // ARM64 memory barriers
+    #define mb()  __asm__ __volatile__("dmb ish" ::: "memory")  // Full memory barrier
+    #define rmb() __asm__ __volatile__("dmb ishld" ::: "memory") // Read memory barrier
+    #define wmb() __asm__ __volatile__("dmb ishst" ::: "memory") // Write memory barrier
+#elif defined(__x86_64__)
+    // x86-64 memory barriers (TSO memory model - most operations are ordered)
+    #define mb()  __asm__ __volatile__("mfence" ::: "memory")  // Full memory barrier
+    #define rmb() __asm__ __volatile__("lfence" ::: "memory")  // Read memory barrier
+    #define wmb() __asm__ __volatile__("sfence" ::: "memory")  // Write memory barrier
+#else
+    // Fallback to compiler barrier only
+    #define mb()  barrier()
+    #define rmb() barrier()
+    #define wmb() barrier()
+#endif
+
 // Additional types needed by file system
 typedef long ssize_t;
 typedef long off_t;
