@@ -1189,6 +1189,77 @@ out:
     return result;
 }
 
+int sfs_rename_dirent(struct file_system *fs, struct inode *dir_inode, const char *oldname, const char *newname)
+{
+    if (!fs || !dir_inode || !oldname || !newname || !dir_inode->private_data) {
+        return VFS_EINVAL;
+    }
+
+    struct sfs_inode_data *dir_data = (struct sfs_inode_data *)dir_inode->private_data;
+    struct sfs_inode *disk_inode = &dir_data->disk_inode;
+
+    if ((disk_inode->mode & SFS_TYPE_DIRECTORY) == 0) {
+        return VFS_EINVAL;
+    }
+
+    size_t newname_len = strlen(newname);
+    if (newname_len == 0 || newname_len >= SFS_MAX_NAME) {
+        return VFS_EINVAL;
+    }
+
+    void *block_buffer = kmalloc(SFS_BLOCK_SIZE);
+    if (!block_buffer) {
+        return VFS_ENOMEM;
+    }
+
+    int result = VFS_ENOENT;
+    int entries_per_block = SFS_BLOCK_SIZE / sizeof(struct sfs_dirent);
+
+    // Search for the old name and rename it
+    for (uint32_t block_index = 0; block_index < SFS_DIRECT_BLOCKS; block_index++) {
+        uint32_t block_num = disk_inode->direct[block_index];
+        if (block_num == 0) {
+            continue;
+        }
+
+        if (sfs_read_block(fs, block_num, block_buffer) != VFS_SUCCESS) {
+            result = VFS_EIO;
+            goto out;
+        }
+
+        struct sfs_dirent *entries = (struct sfs_dirent *)block_buffer;
+        for (int i = 0; i < entries_per_block; i++) {
+            if (entries[i].inode == 0) {
+                continue;
+            }
+
+            if (strncmp(entries[i].name, oldname, SFS_MAX_NAME) != 0) {
+                continue;
+            }
+
+            // Found the entry, update the name
+            strncpy(entries[i].name, newname, SFS_MAX_NAME - 1);
+            entries[i].name[SFS_MAX_NAME - 1] = '\0';
+            entries[i].name_len = (uint16_t)newname_len;
+
+            if (sfs_write_block(fs, block_num, block_buffer) != VFS_SUCCESS) {
+                result = VFS_EIO;
+                goto out;
+            }
+
+            dir_data->dirty = 1;
+            sfs_sync_inode(dir_inode);
+
+            result = VFS_SUCCESS;
+            goto out;
+        }
+    }
+
+out:
+    kfree(block_buffer);
+    return result;
+}
+
 int sfs_create_file(struct file_system *fs, const char *path, uint32_t mode)
 {
     if (!fs || !path) {

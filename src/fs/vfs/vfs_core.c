@@ -1059,7 +1059,72 @@ int vfs_rename(const char *oldpath, const char *newpath)
 
     struct file_system *fs = old_mount->fs;
 
-    // Currently only RAMFS supports rename
+    // Handle SFS rename
+    if (fs->type == &sfs_fs_type) {
+        // Get parent directories for both paths
+        char *old_dirname = vfs_get_dirname(oldpath);
+        char *new_dirname = vfs_get_dirname(newpath);
+
+        if (!old_dirname || !new_dirname) {
+            if (old_dirname) kfree(old_dirname);
+            if (new_dirname) kfree(new_dirname);
+            return VFS_EINVAL;
+        }
+
+        // Check if both files are in the same directory
+        int same_dir = (strcmp(old_dirname, new_dirname) == 0);
+        kfree(old_dirname);
+        kfree(new_dirname);
+
+        if (!same_dir) {
+            // Moving across directories not supported yet in SFS
+            return VFS_EINVAL;
+        }
+
+        // Get the old and new filenames
+        const char *oldname = vfs_get_filename(oldpath);
+        const char *newname = vfs_get_filename(newpath);
+
+        if (!oldname || !newname) {
+            return VFS_EINVAL;
+        }
+
+        // Get the parent directory inode
+        const char *old_fs_path = vfs_path_within_mount(old_mount, oldpath);
+        struct inode *old_inode = sfs_resolve_path(fs, old_fs_path);
+        if (!old_inode) {
+            return VFS_ENOENT;
+        }
+
+        // Check that it's a file, not a directory
+        struct sfs_inode_data *inode_data = (struct sfs_inode_data *)old_inode->private_data;
+        if (!inode_data || (inode_data->disk_inode.mode & SFS_TYPE_DIRECTORY)) {
+            sfs_put_inode(old_inode);
+            return VFS_EINVAL;
+        }
+        sfs_put_inode(old_inode);
+
+        // Get parent directory
+        char *parent_path = vfs_get_dirname(oldpath);
+        if (!parent_path) {
+            return VFS_EINVAL;
+        }
+
+        const char *parent_fs_path = vfs_path_within_mount(old_mount, parent_path);
+        struct inode *parent_inode = sfs_resolve_path(fs, parent_fs_path);
+        kfree(parent_path);
+
+        if (!parent_inode) {
+            return VFS_ENOENT;
+        }
+
+        // Perform the rename
+        int result = sfs_rename_dirent(fs, parent_inode, oldname, newname);
+        sfs_put_inode(parent_inode);
+        return result;
+    }
+
+    // Handle RAMFS rename (existing code)
     if (fs->type != &ramfs_fs_type) {
         return VFS_EINVAL;
     }
