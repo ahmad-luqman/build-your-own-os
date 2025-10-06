@@ -8,6 +8,7 @@
 #include "process.h"
 #include "memory.h"
 #include "timer.h"
+#include "block_device.h"
 
 // List processes command
 int cmd_ps(struct shell_context *ctx, int argc, char *argv[])
@@ -180,6 +181,73 @@ int cmd_uptime(struct shell_context *ctx, int argc, char *argv[])
     
     // Show active tasks
     shell_print("Active tasks: 3 running, 2 sleeping\n");
-    
+
+    return SHELL_SUCCESS;
+}
+
+// Show detailed memory information command
+int cmd_meminfo(struct shell_context *ctx, int argc, char *argv[])
+{
+    if (!ctx) {
+        return SHELL_EINVAL;
+    }
+
+    int show_all = 0;
+    int show_leaks = 0;
+    int show_subsys = 0;
+    int show_cache = 0;
+
+    // Parse options
+    for (int i = 1; i < argc; i++) {
+        if (argv[i][0] == '-') {
+            for (int j = 1; argv[i][j]; j++) {
+                if (argv[i][j] == 'a') {
+                    show_all = 1;
+                } else if (argv[i][j] == 'l') {
+                    show_leaks = 1;
+                } else if (argv[i][j] == 's') {
+                    show_subsys = 1;
+                } else if (argv[i][j] == 'c') {
+                    show_cache = 1;
+                }
+            }
+        }
+    }
+
+    // If -a is specified, show everything
+    if (show_all) {
+        show_leaks = 1;
+        show_subsys = 1;
+        show_cache = 1;
+    }
+
+    // Always show basic allocation stats
+    memory_get_alloc_stats();
+
+    // Show leak detection if requested
+    if (show_leaks) {
+        memory_leak_check();
+        memory_show_allocations();
+    }
+
+    // Show per-subsystem stats if requested
+    if (show_subsys) {
+        memory_subsystem_stats();
+    }
+
+    // Show block cache stats if requested
+    if (show_cache) {
+        block_cache_stats();
+    }
+
+    // Show usage help if no options
+    if (!show_all && !show_leaks && !show_subsys && !show_cache) {
+        shell_print("\nOptions:\n");
+        shell_print("  -a  Show all memory information\n");
+        shell_print("  -l  Show memory leak detection\n");
+        shell_print("  -s  Show per-subsystem statistics\n");
+        shell_print("  -c  Show block cache statistics\n");
+    }
+
     return SHELL_SUCCESS;
 }

@@ -133,6 +133,7 @@ int cmd_free(struct shell_context *ctx, int argc, char *argv[]);
 int cmd_uname(struct shell_context *ctx, int argc, char *argv[]);
 int cmd_date(struct shell_context *ctx, int argc, char *argv[]);
 int cmd_uptime(struct shell_context *ctx, int argc, char *argv[]);
+int cmd_meminfo(struct shell_context *ctx, int argc, char *argv[]);
 
 // Shell system functions
 int shell_init_system(void);

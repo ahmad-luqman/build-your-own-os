@@ -37,10 +37,11 @@ static struct shell_command shell_commands[] = {
     // System information
     {"ps", "List processes", cmd_ps, 0, 1},
     {"free", "Show memory usage", cmd_free, 0, 0},
+    {"meminfo", "Detailed memory information", cmd_meminfo, 0, 4},
     {"uname", "Show system information", cmd_uname, 0, 1},
     {"date", "Show current date/time", cmd_date, 0, 0},
     {"uptime", "Show system uptime", cmd_uptime, 0, 0},
-    
+
     // Shell commands
     {"help", "Show available commands", cmd_help, 0, 1},
     {"exit", "Exit shell", cmd_exit, 0, 1},

@@ -170,15 +170,110 @@ void memory_show_layout(struct boot_info *boot_info)
 static uint8_t simple_heap[2 * 1024 * 1024] __attribute__((aligned(KMALLOC_ALIGNMENT)));  // 2MB static heap
 static size_t heap_offset = 0;
 
+// Memory allocation tracking for leak detection
+#define MAX_ALLOC_TRACKING 256
+
+struct alloc_entry {
+    void *ptr;
+    size_t size;
+    const char *file;
+    int line;
+    uint32_t timestamp;  // Simple counter
+};
+
+static struct alloc_entry alloc_table[MAX_ALLOC_TRACKING];
+static uint32_t alloc_timestamp = 0;
+
+// Per-subsystem tracking (based on file prefix)
+struct subsystem_stats {
+    const char *name;
+    size_t allocations;
+    size_t bytes;
+};
+
+static struct subsystem_stats subsys_stats[] = {
+    {"VFS", 0, 0},
+    {"SFS", 0, 0},
+    {"RAMFS", 0, 0},
+    {"Block", 0, 0},
+    {"Shell", 0, 0},
+    {"FD", 0, 0},
+    {"Other", 0, 0},
+};
+
 // Simple memory statistics
 static struct {
     size_t total_allocations;
     size_t total_bytes_allocated;
     size_t peak_usage;
     size_t current_usage;
+    size_t active_allocations;  // Currently allocated blocks
 } kmalloc_stats = {0};
 
+// Helper: Categorize allocation by file name
+static int get_subsystem_index(const char *file) {
+    if (!file) return 6;  // Other
+
+    // Simple substring matching
+    if (strstr(file, "vfs")) return 0;    // VFS
+    if (strstr(file, "sfs")) return 1;    // SFS
+    if (strstr(file, "ramfs")) return 2;  // RAMFS
+    if (strstr(file, "block") || strstr(file, "ramdisk")) return 3;  // Block
+    if (strstr(file, "shell") || strstr(file, "parser") ||
+        strstr(file, "completion") || strstr(file, "history")) return 4;  // Shell
+    if (strstr(file, "fd")) return 5;     // FD
+
+    return 6;  // Other
+}
+
+// Helper: Record allocation in tracking table
+static void record_allocation(void *ptr, size_t size, const char *file, int line) {
+    for (int i = 0; i < MAX_ALLOC_TRACKING; i++) {
+        if (alloc_table[i].ptr == NULL) {
+            alloc_table[i].ptr = ptr;
+            alloc_table[i].size = size;
+            alloc_table[i].file = file;
+            alloc_table[i].line = line;
+            alloc_table[i].timestamp = alloc_timestamp++;
+
+            // Update subsystem stats
+            int subsys = get_subsystem_index(file);
+            subsys_stats[subsys].allocations++;
+            subsys_stats[subsys].bytes += size;
+
+            kmalloc_stats.active_allocations++;
+            return;
+        }
+    }
+    // Tracking table full - allocation still succeeds but not tracked
+}
+
+// Helper: Remove allocation from tracking table
+static void unrecord_allocation(void *ptr) {
+    for (int i = 0; i < MAX_ALLOC_TRACKING; i++) {
+        if (alloc_table[i].ptr == ptr) {
+            // Update subsystem stats
+            int subsys = get_subsystem_index(alloc_table[i].file);
+            subsys_stats[subsys].bytes -= alloc_table[i].size;
+
+            alloc_table[i].ptr = NULL;
+            alloc_table[i].size = 0;
+            alloc_table[i].file = NULL;
+            alloc_table[i].line = 0;
+
+            kmalloc_stats.active_allocations--;
+            return;
+        }
+    }
+}
+
+#ifdef KMALLOC_DEBUG
+void *kmalloc_debug(size_t size, const char *file, int line) {
+#else
 void *kmalloc(size_t size) {
+    const char *file = NULL;
+    int line = 0;
+#endif
     // Simple bump allocator with better tracking
     if (size == 0) return NULL;
 
@@ -235,15 +330,28 @@ void *kmalloc(size_t size) {
         kmalloc_stats.peak_usage = kmalloc_stats.current_usage;
     }
 
+    // Track allocation for leak detection
+    record_allocation(ptr, size, file, line);
+
     // Debug output with address (simplified)
     early_print("kmalloc: OK\n");
 
     return ptr;
 }
 
+#ifdef KMALLOC_DEBUG
+void kfree_debug(void *ptr, const char *file, int line) {
+    (void)file;  // Not used yet, but available for future enhancements
+    (void)line;
+#else
 void kfree(void *ptr) {
+#endif
     // Simple allocator doesn't support freeing individual blocks
     // In a real implementation, this would maintain a free list
+
+    // Remove from tracking table (even though we don't actually free)
+    unrecord_allocation(ptr);
+
     (void)ptr;  // Suppress warning
 }
 
@@ -324,4 +432,232 @@ void memory_get_alloc_stats(void) {
     }
     early_print(" bytes\n");
     early_print("===================================\n");
+}
+
+/**
+ * Check for memory leaks and report them
+ */
+void memory_leak_check(void) {
+    early_print("\n=== Memory Leak Detection ===\n");
+
+    int leak_count = 0;
+    size_t leak_bytes = 0;
+
+    for (int i = 0; i < MAX_ALLOC_TRACKING; i++) {
+        if (alloc_table[i].ptr != NULL) {
+            leak_count++;
+            leak_bytes += alloc_table[i].size;
+        }
+    }
+
+    if (leak_count == 0) {
+        early_print("No memory leaks detected!\n");
+    } else {
+        early_print("LEAKS DETECTED: ");
+        // Print leak count
+        char buf[16];
+        int len = 0;
+        int temp = leak_count;
+        if (temp == 0) {
+            buf[len++] = '0';
+        } else {
+            char temp_buf[16];
+            int temp_len = 0;
+            while (temp > 0) {
+                temp_buf[temp_len++] = '0' + (temp % 10);
+                temp /= 10;
+            }
+            for (int i = temp_len - 1; i >= 0; i--) {
+                buf[len++] = temp_buf[i];
+            }
+        }
+        buf[len] = '\0';
+        early_print(buf);
+        early_print(" allocations, ");
+
+        // Print leak bytes
+        len = 0;
+        size_t temp_size = leak_bytes;
+        if (temp_size == 0) {
+            buf[len++] = '0';
+        } else {
+            char temp_buf[16];
+            int temp_len = 0;
+            while (temp_size > 0) {
+                temp_buf[temp_len++] = '0' + (temp_size % 10);
+                temp_size /= 10;
+            }
+            for (int i = temp_len - 1; i >= 0; i--) {
+                buf[len++] = temp_buf[i];
+            }
+        }
+        buf[len] = '\0';
+        early_print(buf);
+        early_print(" bytes\n");
+    }
+
+    early_print("Active allocations: ");
+    char buf2[16];
+    int len2 = 0;
+    size_t active = kmalloc_stats.active_allocations;
+    if (active == 0) {
+        buf2[len2++] = '0';
+    } else {
+        char temp_buf[16];
+        int temp_len = 0;
+        while (active > 0) {
+            temp_buf[temp_len++] = '0' + (active % 10);
+            active /= 10;
+        }
+        for (int i = temp_len - 1; i >= 0; i--) {
+            buf2[len2++] = temp_buf[i];
+        }
+    }
+    buf2[len2] = '\0';
+    early_print(buf2);
+    early_print("\n===========================\n\n");
+}
+
+/**
+ * Show all active allocations (for debugging)
+ */
+void memory_show_allocations(void) {
+    early_print("\n=== Active Allocations ===\n");
+
+    int shown = 0;
+    for (int i = 0; i < MAX_ALLOC_TRACKING; i++) {
+        if (alloc_table[i].ptr != NULL) {
+            early_print("  ");
+
+            // Show allocation number
+            char buf[8];
+            int len = 0;
+            int num = shown + 1;
+            do {
+                buf[len++] = '0' + (num % 10);
+                num /= 10;
+            } while (num > 0 && len < 7);
+            buf[len] = 0;
+            for (int j = 0; j < len/2; j++) {
+                char c = buf[j];
+                buf[j] = buf[len-1-j];
+                buf[len-1-j] = c;
+            }
+            early_print(buf);
+            early_print(". ");
+
+            // Show size
+            early_print("size=");
+            len = 0;
+            size_t sz = alloc_table[i].size;
+            do {
+                buf[len++] = '0' + (sz % 10);
+                sz /= 10;
+            } while (sz > 0 && len < 7);
+            buf[len] = 0;
+            for (int j = 0; j < len/2; j++) {
+                char c = buf[j];
+                buf[j] = buf[len-1-j];
+                buf[len-1-j] = c;
+            }
+            early_print(buf);
+
+            // Show location if available
+            if (alloc_table[i].file) {
+                early_print(" at ");
+                early_print(alloc_table[i].file);
+                early_print(":");
+
+                // Print line number
+                len = 0;
+                int line = alloc_table[i].line;
+                if (line > 0) {
+                    do {
+                        buf[len++] = '0' + (line % 10);
+                        line /= 10;
+                    } while (line > 0 && len < 7);
+                    buf[len] = 0;
+                    for (int j = 0; j < len/2; j++) {
+                        char c = buf[j];
+                        buf[j] = buf[len-1-j];
+                        buf[len-1-j] = c;
+                    }
+                    early_print(buf);
+                }
+            }
+
+            early_print("\n");
+            shown++;
+
+            // Limit output to prevent overwhelming the console
+            if (shown >= 20) {
+                early_print("  ... (showing first 20 allocations)\n");
+                break;
+            }
+        }
+    }
+
+    if (shown == 0) {
+        early_print("  No active allocations\n");
+    }
+
+    early_print("========================\n\n");
+}
+
+/**
+ * Show per-subsystem memory statistics
+ */
+void memory_subsystem_stats(void) {
+    early_print("\n=== Subsystem Memory Usage ===\n");
+
+    for (int i = 0; i < 7; i++) {
+        if (subsys_stats[i].allocations > 0 || subsys_stats[i].bytes > 0) {
+            early_print("  ");
+            early_print(subsys_stats[i].name);
+            early_print(": ");
+
+            // Print allocation count
+            char buf[16];
+            int len = 0;
+            size_t count = subsys_stats[i].allocations;
+            if (count == 0) {
+                buf[len++] = '0';
+            } else {
+                char temp_buf[16];
+                int temp_len = 0;
+                while (count > 0) {
+                    temp_buf[temp_len++] = '0' + (count % 10);
+                    count /= 10;
+                }
+                for (int j = temp_len - 1; j >= 0; j--) {
+                    buf[len++] = temp_buf[j];
+                }
+            }
+            buf[len] = '\0';
+            early_print(buf);
+            early_print(" allocs, ");
+
+            // Print bytes
+            len = 0;
+            size_t bytes = subsys_stats[i].bytes;
+            if (bytes == 0) {
+                buf[len++] = '0';
+            } else {
+                char temp_buf[16];
+                int temp_len = 0;
+                while (bytes > 0) {
+                    temp_buf[temp_len++] = '0' + (bytes % 10);
+                    bytes /= 10;
+                }
+                for (int j = temp_len - 1; j >= 0; j--) {
+                    buf[len++] = temp_buf[j];
+                }
+            }
+            buf[len] = '\0';
+            early_print(buf);
+            early_print(" bytes\n");
+        }
+    }
+
+    early_print("============================\n\n");
 }

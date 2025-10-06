@@ -94,13 +94,14 @@ int block_device_is_readable(struct block_device *dev);
 int block_device_is_writable(struct block_device *dev);
 void block_device_print_stats(struct block_device *dev);
 
-// Block buffer management (simple caching)
+// Block buffer management (LRU caching)
 struct block_buffer {
     struct block_device *device;
     uint32_t block_num;
     void *data;
     int dirty;
     int ref_count;
+    uint32_t last_access;  // Timestamp for LRU eviction
     struct block_buffer *next;
 };
 
@@ -109,6 +110,10 @@ struct block_buffer *block_buffer_get(struct block_device *dev, uint32_t block);
 int block_buffer_put(struct block_buffer *buf);
 int block_buffer_sync(struct block_buffer *buf);
 int block_buffer_sync_all(void);
+
+// Block cache statistics and management
+void block_cache_stats(void);
+int block_cache_evict_lru(void);
 
 // RAM disk functions
 struct block_device *ramdisk_create(const char *name, size_t size);

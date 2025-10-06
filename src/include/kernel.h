@@ -73,8 +73,20 @@ void show_interrupt_stats(void);
 void show_interrupt_controllers(void);
 
 // Memory allocation functions (simple implementations for shell)
+#ifdef KMALLOC_DEBUG
+void *kmalloc_debug(size_t size, const char *file, int line);
+void kfree_debug(void *ptr, const char *file, int line);
+#define kmalloc(size) kmalloc_debug(size, __FILE__, __LINE__)
+#define kfree(ptr) kfree_debug(ptr, __FILE__, __LINE__)
+#else
 void *kmalloc(size_t size);
 void kfree(void *ptr);
+#endif
+
+// Memory diagnostics functions
+void memory_leak_check(void);
+void memory_show_allocations(void);
+void memory_subsystem_stats(void);
 
 // Architecture-specific functions (implemented in arch/)
 void arch_init(void);
