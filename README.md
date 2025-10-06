@@ -24,10 +24,11 @@ make test
 
 ## Current Status
 
-🎉 **Phase 5 Complete - File System Implementation**
+🎉 **Phase 6 In Progress - Shell Implementation**
 
-✅ **5 of 7 phases complete** (71% progress)
-✅ **Complete operating system** with file system support
+✅ **Phase 5 Complete** - File system with SFS production ready
+✅ **Phase 6 Partial** - Shell with tab completion, pipes, I/O redirection
+✅ **75% Complete** (5.5 of 7 phases)
 ✅ **Cross-platform** ARM64 (UTM) and x86-64 (QEMU) support
 
 ## Architecture Support
@@ -39,12 +40,19 @@ make test
 ## Features (Implemented)
 
 - [x] **Phase 1**: Foundation Setup - Cross-platform build system and development tools
-- [x] **Phase 2**: Bootloader Implementation - UEFI (ARM64) and Multiboot2 (x86-64) 
+- [x] **Phase 2**: Bootloader Implementation - UEFI (ARM64) and Multiboot2 (x86-64)
 - [x] **Phase 3**: Memory Management - MMU/Paging with virtual memory and allocation
 - [x] **Phase 4**: System Services - Device drivers, processes, interrupts, system calls
-- [x] **Phase 5**: File System - VFS layer, SFS implementation, block devices, file I/O
-- [ ] **Phase 6**: User Interface - Shell implementation and CLI utilities  
+- [x] **Phase 5**: File System - VFS layer, SFS implementation, block devices, file I/O, persistence
+- [x] **Phase 6** *(75% complete)*: Shell with tab completion, pipes, I/O redirection, 25+ commands
 - [ ] **Phase 7**: Polish & Documentation - Final optimizations and comprehensive guides
+
+### Recent Achievements (October 2025)
+- ✅ **Memory Management Audit** - Complete leak detection and cache management (Issue #12)
+- ✅ **Pipe Execution** - Full pipe support with `|` operator (Issue #16)
+- ✅ **Tab Completion** - Fixed cursor positioning bug (Issue #1)
+- ✅ **SFS File Operations** - 100% feature parity with RAMFS (Issues #4-#10, #15)
+- ✅ **Shell Commands** - 25+ built-in commands including meminfo, mount, umount
 
 ## Repository Structure
 
@@ -84,23 +92,54 @@ make ARCH=arm64
 make test
 ```
 
-### Complete Documentation
-1. **Phase 1 Usage**: See [PHASE1_USAGE.md](docs/PHASE1_USAGE.md) - How to run current implementation
-2. **Prerequisites**: See [PREREQUISITES.md](docs/PREREQUISITES.md) - Environment setup
-3. **Build Instructions**: See [BUILD.md](docs/BUILD.md) - Detailed build system
-4. **Development Plan**: See [DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) - Complete roadmap
-5. **VM Setup**: See [VM_SETUP.md](docs/VM_SETUP.md) - Virtual machine configuration
-6. **Testing Guide**: See [PHASE1_TESTING.md](docs/PHASE1_TESTING.md) - Validation procedures
-7. **Testing Scripts**: See [scripts/testing/README.md](scripts/testing/README.md) - Test script reference
-8. **Spec-Driven Development**: See [.spec-kit/README.md](.spec-kit/README.md) - Specification-driven workflow
+### Quick Links
+- 📋 **[Project Status](CURRENT_STATUS.md)** - Current progress and achievements
+- 🗺️ **[Roadmap](ROADMAP.md)** - Future plans and vision
+- 🔧 **[Known Issues](docs/reference/KNOWN_ISSUES.md)** - Open issues and limitations
+- ✅ **[Completed Features](docs/reference/COMPLETED_FEATURES.md)** - All working features
+- 📊 **[GitHub Project Board](https://github.com/users/ahmad-luqman/projects/9)** - Issue tracking
+- 🤖 **[CLAUDE.md](CLAUDE.md)** - AI assistant development guide
 
 ## Documentation
 
-- [Development Plan](docs/DEVELOPMENT_PLAN.md) - Complete roadmap and implementation steps
-- [Architecture Design](docs/ARCHITECTURE.md) - System architecture and design decisions
-- [Build System](docs/BUILD.md) - How to build the OS
-- [VM Configuration](docs/VM_SETUP.md) - Setting up UTM and other VMs
-- [API Reference](docs/API.md) - Kernel and system call documentation
+### Essential Documents
+- **[ROADMAP.md](ROADMAP.md)** - Development roadmap and future plans
+- **[CURRENT_STATUS.md](CURRENT_STATUS.md)** - Current project status and progress
+- **[CLAUDE.md](CLAUDE.md)** - AI assistant guidance for development
+
+### Getting Started
+- [Getting Started Guide](docs/GETTING_STARTED.md) - Setup and first build
+- [Prerequisites](docs/PREREQUISITES.md) - Environment setup requirements
+- [VM Setup](docs/VM_SETUP.md) - Virtual machine configuration (UTM/QEMU)
+
+### User Documentation
+- [User Guide](docs/reference/USER_GUIDE.md) - How to use MiniOS shell and commands
+- [File System Quick Reference](docs/reference/FS_QUICK_REFERENCE.md) - File system operations
+- [Running MiniOS Guide](docs/reference/RUNNING_MINIOS_GUIDE.md) - Boot and run instructions
+
+### Reference Documentation
+- [Completed Features](docs/reference/COMPLETED_FEATURES.md) - Comprehensive list of all working features
+- [Known Issues](docs/reference/KNOWN_ISSUES.md) - Current issues and limitations
+- [SFS Status](docs/reference/SFS_STATUS.md) - File system capabilities and testing results
+
+### Developer Documentation
+- [Architecture](docs/architecture/ARCHITECTURE.md) - System design and architecture
+- [File System Architecture](docs/architecture/FILE_SYSTEM_ARCHITECTURE.md) - FS layer details
+- [Build System](docs/development/BUILD.md) - Build instructions and customization
+- [Development Guide](docs/development/DEVELOPMENT.md) - Development workflow
+- [Git Workflow](docs/development/GIT_WORKFLOW.md) - Branching and commit strategy
+
+### Phase Documentation
+- [Phase 1: Foundation](docs/phases/PHASE1.md) - Build system and tooling ✅
+- [Phase 2: Bootloader](docs/phases/PHASE2.md) - Boot implementation ✅
+- [Phase 3: Memory Management](docs/phases/PHASE3.md) - MMU and paging ✅
+- [Phase 4: System Services](docs/phases/PHASE4.md) - Drivers and processes ✅
+- [Phase 5: File System](docs/phases/PHASE5.md) - VFS and SFS ✅
+- [Phase 6: Shell](docs/phases/PHASE6.md) - User interface 🔄 (75%)
+- [Phase 7: Polish](docs/phases/PHASE7.md) - Final optimizations ⏳
+
+### Testing Documentation
+- [Testing Scripts README](scripts/testing/README.md) - Test suite reference
 
 ## Contributing
 
