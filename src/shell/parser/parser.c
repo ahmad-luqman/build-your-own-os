@@ -6,44 +6,6 @@
 #include "shell.h"
 #include "kernel.h"
 
-static unsigned int pipe_sequence = 0;
-
-static void build_pipe_temp_path(char *buffer, size_t size)
-{
-    const char prefix[] = "/tmp/pipe_";
-    int prefix_len = strlen(prefix);
-
-    if (!buffer || size == 0) {
-        return;
-    }
-
-    if ((int)size <= prefix_len + 1) {
-        buffer[0] = '\0';
-        return;
-    }
-
-    strcpy(buffer, prefix);
-    int pos = prefix_len;
-
-    unsigned int id = pipe_sequence++;
-    char digits[10];
-    int digit_count = 0;
-
-    if (id == 0) {
-        digits[digit_count++] = '0';
-    } else {
-        while (id > 0 && digit_count < (int)sizeof(digits)) {
-            digits[digit_count++] = (char)('0' + (id % 10));
-            id /= 10;
-        }
-    }
-
-    while (digit_count > 0 && pos < (int)size - 1) {
-        buffer[pos++] = digits[--digit_count];
-    }
-
-    buffer[pos] = '\0';
-}
 
 // Parse command line into structured format
 int parse_command_line(const char *input, struct command_line *cmd)
@@ -169,42 +131,107 @@ int execute_command(struct shell_context *ctx, struct command_line *cmd)
             return SHELL_EINVAL;
         }
 
-        // Temporary file bridge for the pipe
-        char temp_file[64];
-        build_pipe_temp_path(temp_file, sizeof(temp_file));
+        // Create a simple temp file path using context pointer as unique ID
+        char *temp_file = (char *)kmalloc(32);
+        if (!temp_file) {
+            shell_print_error("Failed to allocate pipe temp file\n");
+            return SHELL_ENOMEM;
+        }
+
+        // Use pointer address as unique ID (simple but effective)
+        unsigned long id = ((unsigned long)temp_file >> 4) & 0xFFFFF;
+
+        // Build path manually to avoid any complex functions
+        const char *prefix = "/tmp/pipe_";
+        int pos = 0;
+        while (prefix[pos]) {
+            temp_file[pos] = prefix[pos];
+            pos++;
+        }
+
+        // Convert id to hex string (simpler than decimal)
+        for (int i = 4; i >= 0; i--) {
+            int digit = (id >> (i * 4)) & 0xF;
+            if (digit < 10) {
+                temp_file[pos++] = '0' + digit;
+            } else {
+                temp_file[pos++] = 'a' + (digit - 10);
+            }
+        }
+        temp_file[pos] = '\0';
+
+        // Deep copy arguments for left command to avoid shared pointer issues
+        char **left_args = (char **)kmalloc((pipe_index + 1) * sizeof(char *));
+        if (!left_args) {
+            kfree(temp_file);
+            return SHELL_ENOMEM;
+        }
+
+        // Copy argument pointers for left command
+        for (int i = 0; i < pipe_index; i++) {
+            left_args[i] = cmd->arguments[i];
+        }
+        left_args[pipe_index] = NULL;  // Null terminate
+
+        // Deep copy arguments for right command
+        char **right_args = (char **)kmalloc((cmd->argument_count - pipe_index) * sizeof(char *));
+        if (!right_args) {
+            kfree(left_args);
+            kfree(temp_file);
+            return SHELL_ENOMEM;
+        }
+
+        // Copy argument pointers for right command
+        for (int i = 0; i < cmd->argument_count - pipe_index - 1; i++) {
+            right_args[i] = cmd->arguments[pipe_index + 1 + i];
+        }
+        right_args[cmd->argument_count - pipe_index - 1] = NULL;  // Null terminate
 
         // Prepare left command (before pipe) to write into temp file
-        struct command_line left_cmd = *cmd;
+        struct command_line left_cmd;
+        memset(&left_cmd, 0, sizeof(left_cmd));
+        left_cmd.command = cmd->command;
+        left_cmd.arguments = left_args;
         left_cmd.argument_count = pipe_index;
         left_cmd.output_redirect = temp_file;
         left_cmd.output_append = 0;
+        left_cmd.input_redirect = cmd->input_redirect;  // Pass through input redirect if any
         left_cmd.pipe_next = NULL;
-
-        // Ensure argument array terminates for the left command
-        cmd->arguments[pipe_index] = NULL;
+        left_cmd.background = 0;
 
         // Prepare right command (after pipe) to read from temp file
         struct command_line right_cmd;
         memset(&right_cmd, 0, sizeof(right_cmd));
         right_cmd.command = cmd->arguments[pipe_index + 1];
-        right_cmd.arguments = &cmd->arguments[pipe_index + 1];
+        right_cmd.arguments = right_args;
         right_cmd.argument_count = cmd->argument_count - pipe_index - 1;
         right_cmd.input_redirect = temp_file;
-        right_cmd.output_redirect = cmd->output_redirect;
+        right_cmd.output_redirect = cmd->output_redirect;  // Pass through output redirect if any
         right_cmd.output_append = cmd->output_append;
         right_cmd.background = cmd->background;
         right_cmd.pipe_next = NULL;
 
+        // Execute left command first
         int result1 = execute_command(ctx, &left_cmd);
-        if (result1 != SHELL_SUCCESS) {
-            vfs_unlink(temp_file);
-            return result1;
+
+        // Execute right command only if left succeeded
+        int result2 = SHELL_ERROR;
+        if (result1 == SHELL_SUCCESS) {
+            result2 = execute_command(ctx, &right_cmd);
         }
 
-        int result2 = execute_command(ctx, &right_cmd);
+        // Clean up allocated memory
+        kfree(left_args);
+        kfree(right_args);
+
+        // Try to remove temp file (ignore errors if it doesn't exist)
         vfs_unlink(temp_file);
-        return result2;
+        kfree(temp_file);
+
+        // Return the result of the pipeline (right command's result)
+        return (result1 == SHELL_SUCCESS) ? result2 : result1;
     }
+
 
     // Store output redirection in context so commands can access it
     // Save the original values
