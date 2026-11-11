@@ -34,6 +34,11 @@ else
     BUILD_TYPE = release
 endif
 
+# Architecture flags (from arch-$(ARCH).mk) must be appended after the common
+# CFLAGS above are assigned; appending them inside the arch config is lost
+# because that file is included before `CFLAGS =` resets the variable.
+CFLAGS += $(ARCH_CFLAGS)
+
 # Linker flags
 LDFLAGS = -nostdlib -static
 
@@ -184,6 +189,11 @@ USER_PROGRAM_OBJECTS = $(USER_PROGRAM_SOURCES:$(SRC_DIR)/%.c=$(BUILD_DIR)/$(ARCH
 LIBC_SOURCES = $(wildcard $(SRC_DIR)/userland/lib/minios_libc/*/*.c)
 LIBC_OBJECTS = $(LIBC_SOURCES:$(SRC_DIR)/%.c=$(BUILD_DIR)/$(ARCH)/%.o)
 LIBC_ARCHIVE = $(BUILD_DIR)/$(ARCH)/libminios.a
+
+# ARCH_CFLAGS are kernel-only (e.g. -mno-sse, -mgeneral-regs-only); the
+# userland libc uses floating point, so build it without them. A target-specific
+# variable is used because make 3.81 (macOS) may pick the generic %.o rule.
+$(LIBC_OBJECTS): CFLAGS := $(filter-out $(ARCH_CFLAGS),$(CFLAGS))
 
 # User program build (simplified - not full ELF for now)
 userland: programs libc

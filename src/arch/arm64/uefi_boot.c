@@ -25,6 +25,19 @@ typedef struct {
 static struct boot_info g_boot_info;
 static struct boot_info_arm64 g_arm64_boot_info;
 
+// The bootloader links without the kernel's libc. With -mgeneral-regs-only
+// GCC lowers struct copies to memcpy() calls instead of inline SIMD moves,
+// so provide one here. -fno-tree-loop-distribute-patterns (arch-arm64.mk)
+// keeps GCC from turning this loop back into a call to itself.
+void *memcpy(void *dest, const void *src, size_t n) {
+    uint8_t *d = dest;
+    const uint8_t *s = src;
+    while (n--) {
+        *d++ = *s++;
+    }
+    return dest;
+}
+
 // Simple string functions (remove unused ones)
 static void strcpy_simple(char* dest, const char* src) {
     while (*src) {

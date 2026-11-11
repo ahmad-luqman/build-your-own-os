@@ -16,7 +16,7 @@ ARCH_CFLAGS += -fno-stack-protector
 ARCH_CFLAGS += -mstrict-align
 # Disable SIMD vectorization that causes stack corruption in exception context
 ARCH_CFLAGS += -fno-tree-vectorize
-ARCH_CFLAGS += -fno-slp-vectorize
+ARCH_CFLAGS += -fno-tree-slp-vectorize
 ARCH_CFLAGS += -fno-tree-loop-vectorize
 ARCH_CFLAGS += -fno-tree-loop-distribute-patterns
 # Force optimization level to -O0 for SFS and VFS to prevent SIMD generation
@@ -25,9 +25,6 @@ src/fs/vfs/vfs_core.o: CFLAGS := $(filter-out -O2,$(CFLAGS)) -O0
 
 # Architecture-specific assembler flags
 ASFLAGS = -mcpu=cortex-a72
-
-# Add architecture flags to global flags
-CFLAGS += $(ARCH_CFLAGS)
 
 # Bootloader target
 bootloader: $(BUILD_DIR)/$(ARCH)/bootloader.elf
