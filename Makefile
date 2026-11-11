@@ -11,6 +11,10 @@ TOOLS_DIR ?= tools
 # Create build directory
 $(shell mkdir -p $(BUILD_DIR)/$(ARCH))
 
+# The arch config below defines rules (e.g. bootloader) before `all`, which
+# would otherwise make the first of them the default goal.
+.DEFAULT_GOAL := all
+
 # Include architecture-specific configuration
 include $(TOOLS_DIR)/build/arch-$(ARCH).mk
 
