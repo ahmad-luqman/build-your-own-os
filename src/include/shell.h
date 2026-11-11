@@ -147,6 +147,11 @@ void register_shell_syscalls(void);
 #define SHELL_ENOENT           -3
 #define SHELL_EPERM            -4
 #define SHELL_ENOMEM           -5
+// "No such command": returned ONLY by the command lookup (built-in registry,
+// external programs). Built-ins must never return it; a built-in that cannot
+// find a file returns SHELL_ENOENT, which the dispatcher reports as a failure
+// of that command, not as an unknown command.
+#define SHELL_ENOTFOUND        -6
 
 // Phase 7: Advanced shell functions
 int shell_init_advanced_features(struct shell_context *ctx);

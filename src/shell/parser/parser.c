@@ -254,16 +254,16 @@ int execute_command(struct shell_context *ctx, struct command_line *cmd)
     // Try to execute as built-in command first
     int result = execute_builtin_command(ctx, cmd);
     
-    if (result == SHELL_ENOENT) {
-        // Command not found as built-in, try external program
+    if (result == SHELL_ENOTFOUND) {
+        // Not a built-in, try external program
         result = execute_external_program(ctx, cmd);
         
-        if (result == SHELL_ENOENT) {
+        if (result == SHELL_ENOTFOUND) {
             shell_printf("Command not found: %s\n", cmd->command);
             ctx->output_redirect_file = saved_output_redirect;
             ctx->output_append_mode = saved_append_mode;
             ctx->input_redirect_file = saved_input_redirect;
-            return SHELL_ENOENT;
+            return SHELL_ENOTFOUND;
         }
     }
     
@@ -305,7 +305,7 @@ int execute_builtin_command(struct shell_context *ctx, struct command_line *cmd)
     // Find command in registry
     struct shell_command *shell_cmd = shell_find_command(cmd->command);
     if (!shell_cmd) {
-        return SHELL_ENOENT;
+        return SHELL_ENOTFOUND;
     }
     
     // Validate argument count, considering input/output redirection
@@ -351,7 +351,7 @@ int execute_external_program(struct shell_context *ctx, struct command_line *cmd
     // 3. Create new process
     // 4. Execute program with arguments
     
-    return SHELL_ENOENT;
+    return SHELL_ENOTFOUND;
 }
 
 // Set up I/O redirection
