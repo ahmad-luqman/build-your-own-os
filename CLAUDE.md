@@ -294,8 +294,8 @@ regression scripts rather than trusting this list:
 `scripts/testing/test_shell_both_arches.sh all` and `scripts/testing/test_sfs_both_arches.sh all`.
 
 - ✅ File operations: touch, cat, echo, ls, pwd, cd, rm, cp, mv
-- ✅ mv across directories on RAMFS (files) and SFS (files and directories); refuses an existing destination, the same path, and moving a directory into its own subtree; `mv x dir` moves into `dir`
-- ✅ Output redirection for built-ins: `cmd > file`, `cmd >> file` (output printed by kernel code, e.g. most of `meminfo`, still goes to the console)
+- ✅ mv across directories on RAMFS (files) and SFS (files and directories); refuses an existing destination, the same path, moving a directory into its own subtree, and moving a directory with a filesystem mounted inside it; `mv x dir` moves into `dir`
+- ✅ Output redirection for built-ins: `cmd > file`, `cmd >> file`; the target is created before the command runs, so a bad path fails without running it (output printed by kernel code, e.g. most of `meminfo`, still goes to the console)
 - ✅ Input redirection: `cat < file`
 - ✅ Pipes for built-ins: `cmd1 | cmd2`, multi-stage `cmd1 | cmd2 | cmd3`
 - ✅ One-line error messages: `Error: <what>: <path>[: <reason>]`; "Command not found" only for unknown commands

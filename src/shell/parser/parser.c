@@ -194,6 +194,7 @@ int execute_command(struct shell_context *ctx, struct command_line *cmd)
         left_cmd.arguments = left_args;
         left_cmd.argument_count = pipe_index;
         left_cmd.output_redirect = temp_file;
+        left_cmd.output_is_pipe = 1;
         left_cmd.output_append = 0;
         left_cmd.input_redirect = cmd->input_redirect;  // Pass through input redirect if any
         left_cmd.pipe_next = NULL;
@@ -254,11 +255,14 @@ int execute_command(struct shell_context *ctx, struct command_line *cmd)
     if (cmd->output_redirect) {
         shell_build_full_path(redirect_path, sizeof(redirect_path),
                               ctx->current_directory, cmd->output_redirect);
-        int begin = shell_redirect_begin(redirect_path, cmd->output_append);
-        if (begin != SHELL_SUCCESS) {
+        // An explicit "> file" is created/truncated now, before the command
+        // runs; a pipe temp file is created when output is first flushed.
+        int begin = shell_redirect_begin(redirect_path, cmd->output_append,
+                                         !cmd->output_is_pipe);
+        if (begin != VFS_SUCCESS) {
             shell_error("Cannot redirect output: %s: %s", redirect_path,
-                        begin == SHELL_ENOMEM ? "out of memory" : "redirect already active");
-            result = begin;
+                        shell_vfs_strerror(begin));
+            result = SHELL_ERROR;
             goto restore;
         }
     }
@@ -271,7 +275,8 @@ int execute_command(struct shell_context *ctx, struct command_line *cmd)
     }
 
     if (cmd->output_redirect) {
-        // Don't create the target for a command that doesn't exist
+        // Unknown command: discard (an explicit target was already created,
+        // as in a Unix shell; a pipe temp file is not)
         int end = shell_redirect_end(result != SHELL_ENOTFOUND);
         if (end != VFS_SUCCESS) {
             shell_error("Cannot write file: %s: %s", redirect_path, shell_vfs_strerror(end));

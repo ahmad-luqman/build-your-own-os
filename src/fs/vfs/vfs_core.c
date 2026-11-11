@@ -145,6 +145,22 @@ static int vfs_path_is_prefix(const char *path, const char *prefix)
     return 0;
 }
 
+// True if a filesystem is mounted strictly below path (path itself excluded)
+static int vfs_has_mount_below(const char *path)
+{
+    size_t len = strlen(path);
+
+    for (int i = 0; i < MAX_MOUNTS; i++) {
+        const struct vfs_mount *mount = mounts[i];
+        if (mount && strncmp(mount->mountpoint, path, len) == 0 &&
+            mount->mountpoint[len] == '/') {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
 static struct vfs_mount *vfs_find_mount_for_path(const char *path)
 {
     if (!vfs_initialized || !path) {
@@ -718,8 +734,9 @@ int vfs_open(const char *path, int flags, int mode)
                 return VFS_ENOENT;
             }
 
-            if (ramfs_create_file(fs, fs_path, mode ? (uint32_t)mode : 0644) != VFS_SUCCESS) {
-                return VFS_ERROR;
+            int create_result = ramfs_create_file(fs, fs_path, mode ? (uint32_t)mode : 0644);
+            if (create_result != VFS_SUCCESS) {
+                return create_result;
             }
 
             node = vfs_ramfs_resolve(fs, fs_path);
@@ -1077,6 +1094,13 @@ int vfs_rename(const char *oldpath, const char *newpath)
     size_t old_len = strlen(oldpath);
     if (strncmp(newpath, oldpath, old_len) == 0 && newpath[old_len] == '/') {
         return VFS_EINVAL;
+    }
+
+    // Refuse to move a directory with a filesystem mounted inside it: the
+    // mount table stores absolute mountpoints, which would keep pointing at
+    // the old path.
+    if (vfs_has_mount_below(oldpath)) {
+        return VFS_EBUSY;
     }
 
     struct inode stat_buf;

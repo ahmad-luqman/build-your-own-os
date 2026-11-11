@@ -77,6 +77,7 @@ struct command_line {
     int argument_count;
     char *input_redirect;
     char *output_redirect;
+    int output_is_pipe;             // output_redirect is a pipe temp file (create lazily)
     int output_append;        // 1 if >> (append), 0 if > (truncate)
     int background;
     // Basic pipe support
@@ -97,7 +98,7 @@ int shell_read_command(struct shell_context *ctx);
 void shell_print(const char *message);
 void shell_error(const char *format, ...);        // "Error: <msg>\n", never redirected
 const char *shell_vfs_strerror(int vfs_error);    // VFS_E* -> "not found", ...
-int shell_redirect_begin(const char *path, int append);  // capture shell_print output
+int shell_redirect_begin(const char *path, int append, int create_now);  // VFS_E* or 0
 int shell_redirect_end(int commit);                      // flush + close; VFS_E* or 0
 void shell_build_full_path(char *dest, size_t dest_size, const char *current_dir,
                            const char *path);            // cwd-relative -> normalized absolute

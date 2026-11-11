@@ -7,8 +7,10 @@
 #   #31  a failed built-in does not also print "Command not found"
 #   #3   each error is exactly one line: "Error: <what>: <path>[: <reason>]"
 #   #29  `>` redirection and pipes work for any built-in, not just echo
+#        (an explicit "> file" is created before the command runs)
 #   #30  mv across directories works on SFS (files and directories), refuses
-#        bad moves, and persists across umount/mount; RAMFS mv across dirs
+#        bad moves (incl. a directory with a mount inside), and persists
+#        across umount/mount; RAMFS mv across dirs
 #
 # Usage:
 #   scripts/testing/test_shell_both_arches.sh [x86_64|arm64|all]   (default: all)
@@ -59,6 +61,11 @@ COMMANDS=(
     "cat /tmp/e/a.txt"
     "mv /tmp/e/a.txt /tmp/e/a.txt"
     "ls /tmp/e"
+    "touch /tmp/rf"
+    "rm /tmp/rf > /tmp/rf"
+    "cat /tmp/rf"
+    "rm /tmp/e/a.txt > /nodir/out"
+    "ls /tmp/e/"
 
     # --- #30: SFS mv ---
     "mkdir /sfs"
@@ -75,6 +82,11 @@ COMMANDS=(
     "mv /sfs/a/b /sfs/c/b"
     "mv /sfs/c /sfs/c/b/c2"
     "mv /sfs/a/x.txt /sfs/c"
+    "mkdir /sfs/p"
+    "mkdir /sfs/p/m"
+    "mount none /sfs/p/m ramfs"
+    "mv /sfs/p /sfs/q"
+    "umount /sfs/p/m"
     "umount /sfs"
     "mount ramdisk0 /sfs sfs"
     "cat /sfs/c/b/h.txt"
@@ -216,6 +228,11 @@ run_arch() {
     check "mv onto itself is refused"              one_error "$(b "mv /tmp/e/a.txt /tmp/e/a.txt")" "/tmp/e/a.txt"
     check "mv onto itself keeps the file"          has "$(b "ls /tmp/e")" "a\.txt"
 
+    echo "  -- #29 explicit redirect target is opened before the command runs"
+    check "rm f > f leaves f removed"              one_error "$(b "cat /tmp/rf")" "/tmp/rf" "not found"
+    check "bad redirect path: one error"           one_error "$(b "rm /tmp/e/a.txt > /nodir/out")" "/nodir/out" "not found"
+    check "bad redirect path: command did not run" has "$(b "ls /tmp/e/")" "a\.txt"
+
     echo "  -- #30 mv across directories (SFS)"
     p=$(b "mv /sfs/a/g.txt /sfs/a/b/h.txt")
     check "mv file into subdirectory succeeds"     has "$p" "Moved"
@@ -229,6 +246,8 @@ run_arch() {
     check "mv directory into its own subtree is refused" \
         one_error "$(b "mv /sfs/c /sfs/c/b/c2")" "/sfs/c"
     check "mv file onto a directory moves it inside" has "$(b "mv /sfs/a/x.txt /sfs/c")" "/sfs/c/x.txt"
+    check "mv directory containing a mount is refused" \
+        one_error "$(b "mv /sfs/p /sfs/q")" "/sfs/p" "mounted"
     check "after remount: moved file reads 'moved'" has "$(b "cat /sfs/c/b/h.txt")" "^moved$"
     check "after remount: file moved into dir reads 'other'" has "$(b "cat /sfs/c/x.txt")" "^other$"
     p=$(b "ls /sfs/a/")

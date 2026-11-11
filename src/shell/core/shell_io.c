@@ -324,8 +324,16 @@ static void shell_console_write(const char *message)
  * growing write, so per-call writes would leak O(n^2) heap. The buffer itself
  * is allocated once and reused for every redirect.
  *
- * The target is opened lazily on the first flush, so a command whose output
- * fits in one chunk (e.g. "ls /tmp | cat") does not see its own pipe file.
+ * An explicit target ("> file", ">> file") is created/truncated BEFORE the
+ * command runs, as a Unix shell does: a bad path fails without running the
+ * command. It is then closed and reopened (append, no create) on the first
+ * flush, so a command that removes its own target ("rm f > f") leaves it
+ * removed; the output is discarded, matching the Unix outcome of writing to
+ * an unlinked file. No fd is held open across the command's own changes.
+ *
+ * A pipe temp file is created lazily on the first flush instead, so a
+ * command whose output fits in one chunk (e.g. "ls /tmp | cat") does not see
+ * its own pipe file.
  */
 #define SHELL_REDIRECT_CHUNK 512
 
@@ -334,24 +342,29 @@ static struct {
     size_t len;             // bytes pending in buf
     const char *path;       // absolute target path (owned by the caller)
     int fd;                 // -1 until the first flush opens the target
-    int append;             // 1 for ">>"
+    int open_flags;         // flags for that open
+    int created;            // target already created by shell_redirect_begin()
+    int discard;            // target vanished during the command; drop output
     int active;
     int error;              // first VFS error, reported by shell_redirect_end()
 } shell_redirect;
 
 static void shell_redirect_flush(void)
 {
-    if (shell_redirect.error != VFS_SUCCESS) {
+    if (shell_redirect.error != VFS_SUCCESS || shell_redirect.discard) {
         shell_redirect.len = 0;
         return;
     }
 
     if (shell_redirect.fd < 0) {
-        int flags = VFS_O_WRONLY | VFS_O_CREAT |
-                    (shell_redirect.append ? VFS_O_APPEND : VFS_O_TRUNC);
-        int fd = vfs_open(shell_redirect.path, flags, 0644);
+        int fd = vfs_open(shell_redirect.path, shell_redirect.open_flags, 0644);
         if (fd < 0) {
-            shell_redirect.error = fd;
+            if (shell_redirect.created && fd == VFS_ENOENT) {
+                // The command removed its own target ("rm f > f")
+                shell_redirect.discard = 1;
+            } else {
+                shell_redirect.error = fd;
+            }
             shell_redirect.len = 0;
             return;
         }
@@ -368,32 +381,47 @@ static void shell_redirect_flush(void)
     }
 }
 
-// Start capturing shell_print() output for path (absolute). Returns
-// SHELL_SUCCESS, SHELL_ENOMEM, or SHELL_EINVAL if a redirect is already active.
-int shell_redirect_begin(const char *path, int append)
+// Start capturing shell_print() output for path (absolute). If create_now,
+// create/truncate the target immediately (explicit "> file"); otherwise
+// create it on the first flush (pipe temp file). Returns VFS_SUCCESS or a
+// VFS_E* code, in which case the command must not run.
+int shell_redirect_begin(const char *path, int append, int create_now)
 {
     if (!path || shell_redirect.active) {
-        return SHELL_EINVAL;
+        return VFS_EINVAL;
     }
 
     if (!shell_redirect.buf) {
         shell_redirect.buf = (char *)kmalloc(SHELL_REDIRECT_CHUNK);
         if (!shell_redirect.buf) {
-            return SHELL_ENOMEM;
+            return VFS_ENOMEM;
         }
+    }
+
+    int create_flags = VFS_O_WRONLY | VFS_O_CREAT | (append ? VFS_O_APPEND : VFS_O_TRUNC);
+    if (create_now) {
+        int fd = vfs_open(path, create_flags, 0644);
+        if (fd < 0) {
+            return fd;
+        }
+        vfs_close(fd);
+        shell_redirect.open_flags = VFS_O_WRONLY | VFS_O_APPEND;  // never re-create
+    } else {
+        shell_redirect.open_flags = create_flags;
     }
 
     shell_redirect.len = 0;
     shell_redirect.path = path;
     shell_redirect.fd = -1;
-    shell_redirect.append = append;
+    shell_redirect.created = create_now;
+    shell_redirect.discard = 0;
     shell_redirect.error = VFS_SUCCESS;
     shell_redirect.active = 1;
-    return SHELL_SUCCESS;
+    return VFS_SUCCESS;
 }
 
-// Stop capturing. If commit, write any pending output (creating the target
-// even when the command printed nothing, so a pipe reader can open it);
+// Stop capturing. If commit, write any pending output (creating a pipe
+// target even when the command printed nothing, so the reader can open it);
 // otherwise discard it. Returns VFS_SUCCESS or the first VFS error seen.
 int shell_redirect_end(int commit)
 {
@@ -401,7 +429,7 @@ int shell_redirect_end(int commit)
         return VFS_SUCCESS;
     }
 
-    if (commit) {
+    if (commit && (shell_redirect.len > 0 || !shell_redirect.created)) {
         shell_redirect_flush();
     }
 
@@ -577,6 +605,7 @@ const char *shell_vfs_strerror(int code)
         case VFS_ENOSPC:  return "no space left on device";
         case VFS_EIO:     return "I/O error";
         case VFS_ENOTDIR: return "not a directory";
+        case VFS_EBUSY:   return "a filesystem is mounted inside it";
         default:          return "failed";
     }
 }
