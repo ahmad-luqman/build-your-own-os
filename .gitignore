@@ -1,5 +1,7 @@
 # Build outputs
-build/
+# Anchored to the repo root so tools/build/*.mk stay tracked
+/build/
+tests/build/
 *.elf
 *.bin
 *.o
