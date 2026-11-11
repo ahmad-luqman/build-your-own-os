@@ -18,9 +18,6 @@ ARCH_CFLAGS += -fno-stack-protector
 # Architecture-specific assembler flags (NASM)
 ASFLAGS = -f elf64
 
-# Add architecture flags to global flags
-CFLAGS += $(ARCH_CFLAGS)
-
 # Bootloader target
 bootloader: $(BUILD_DIR)/$(ARCH)/bootloader.elf
 
