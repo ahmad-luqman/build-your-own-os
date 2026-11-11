@@ -7,6 +7,7 @@
 #include <stddef.h>
 #include "memory.h"
 #include "boot_protocol.h"
+#include "boot_info_x86_64.h"   // __kernel_start / __kernel_end (linker.ld)
 
 // Memory allocation bitmap
 #define MAX_PAGES           32768       // Support up to 128MB of 4KB pages
@@ -113,7 +114,40 @@ void arch_memory_allocator_init(struct memory_map_entry *memory_map,
             return;  // Region too small
         }
     }
-    
+
+    /*
+     * Reserve the kernel image (issue #27).
+     *
+     * GRUB loads the kernel at __kernel_start (0x100000) and it runs up to
+     * __kernel_end (.text, .rodata, .data, .bss, including the static
+     * kmalloc heap). The firmware memory map still reports that range as
+     * available, so skipping only the first 1MB is not enough: the very first
+     * page handed out used to be 0x100000. The ramdisk got that address and
+     * SFS format then zeroed the kernel's own .text (page fault handler,
+     * handle_interrupt, kmalloc), ending in a page fault -> double fault ->
+     * triple fault whose timing depended on code layout.
+     *
+     * If the kernel overlaps the chosen region, move the base up to the
+     * page-aligned end of the image, so [region start, kernel end) is never
+     * handed out. Any pages below the kernel are given up, which keeps the
+     * allocator a single contiguous range.
+     */
+    uint64_t kernel_start = (uint64_t)(uintptr_t)&__kernel_start;
+    uint64_t kernel_end = ((uint64_t)(uintptr_t)&__kernel_end + PAGE_SIZE_4K - 1)
+                          & ~(uint64_t)(PAGE_SIZE_4K - 1);
+    uint64_t region_end = memory_base + usable_size;
+
+    if (kernel_start < region_end && kernel_end > memory_base) {
+        if (kernel_end >= region_end) {
+            early_print("allocator_init: Kernel image covers the whole usable region, "
+                        "no pages available!\n");
+            return;  // total_pages/free_pages stay 0, so allocations return NULL
+        }
+        early_print("allocator_init: Reserving kernel image, base moved past __kernel_end\n");
+        usable_size = region_end - kernel_end;
+        memory_base = kernel_end;
+    }
+
     early_print("allocator_init: Calculating pages\n");
     // Calculate number of pages we can manage
     total_pages = usable_size / PAGE_SIZE_4K;
