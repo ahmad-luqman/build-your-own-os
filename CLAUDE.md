@@ -176,6 +176,11 @@ make quick-test
 ./tools/test-phase3.sh      # Phase 3 memory testing
 ./tools/test-phase4.sh      # Phase 4 system services testing
 
+# QEMU regression scenarios (bash; non-zero exit on failure).
+# Build first: make ARCH=x86_64 kernel && ./tools/create-grub-iso.sh; make ARCH=arm64 kernel
+scripts/testing/test_shell_both_arches.sh [x86_64|arm64|all]   # shell: errors, pipes, redirection, mv
+scripts/testing/test_sfs_both_arches.sh [x86_64|arm64|all]     # SFS mount/write/copy/remount
+
 # Multi-phase testing
 ./test_phases.sh            # Test all completed phases
 ./test_all_phases.sh        # Comprehensive testing
@@ -217,12 +222,12 @@ src/
 - ✅ Phase 3: Memory Management - MMU/Paging with virtual memory
 - ✅ Phase 4: System Services - Device drivers, processes, interrupts, syscalls
 - ✅ Phase 5: File System - VFS layer, SFS with 100% RAMFS feature parity, persistence
-- 🔄 Phase 6: Shell (75%) - Interactive CLI, tab completion, pipes, I/O redirection, 25+ commands
+- 🔄 Phase 6: Shell (75%) - Interactive CLI, tab completion, pipes, I/O redirection, 25+ commands (arrow-key history broken: #32)
 - ⏳ Phase 7: Polish & Documentation
 
 ### Recent Achievements (October 2025)
 - ✅ **Memory Management Audit** (Issue #12) - Leak detection, cache management, meminfo command
-- ✅ **Pipe Execution** (Issue #16) - Full pipe support with `|` operator
+- ⚠️ **Pipe Execution** (Issue #16) - Only worked with `echo` on the left; fixed for all built-ins in #29
 - ✅ **Tab Completion** (Issue #1) - Fixed cursor positioning bug
 - ✅ **SFS File Operations** (Issues #4-#10, #15) - 100% feature parity with RAMFS
   - File creation, read, write, delete, rename/move, copy
@@ -276,21 +281,36 @@ The build system automatically selects appropriate toolchains:
 ## Open Issues (Check GitHub for latest)
 
 ### Current Open Issues
+- #33: ARM64 boot stack lies inside the non-freeing kmalloc heap (high priority)
+- #32: Arrow-key command history does not work (medium priority)
 - #14: Integration Tests (medium priority)
 - #13: SFS Unit Test Suite (medium priority)
 - #11: Comprehensive Error Checking (medium priority)
-- #8: SFS Directory Listing - ls -l metadata (low priority, basic ls works)
-- #3: Enhanced Error Messages (medium priority)
+- #8: ls -l metadata (basic ls works). `ls -l` is currently broken on both arches: `shell_printf` has no `%c`, so each line prints `%crw-r--r--` with no file name, and on x86-64 the shell stops responding after the first line
 
-### Working Features (All Verified)
-- ✅ File operations: touch, cat, echo > file, ls, pwd, cd, rm, cp, mv
-- ✅ Tab completion with correct cursor positioning
-- ✅ Pipe execution: `command1 | command2`
-- ✅ I/O redirection: `command < input` and `command > output`
+### Working Features
+Verified on 2026-11-11 by booting x86-64 and ARM64 in QEMU. Re-verify with the
+regression scripts rather than trusting this list:
+`scripts/testing/test_shell_both_arches.sh all` and `scripts/testing/test_sfs_both_arches.sh all`.
+
+- ✅ File operations: touch, cat, echo, ls, pwd, cd, rm, cp, mv
+- ✅ mv across directories on RAMFS (files) and SFS (files and directories); refuses an existing destination, the same path, moving a directory into its own subtree, and moving a directory with a filesystem mounted inside it; `mv x dir` moves into `dir`
+- ✅ Output redirection for built-ins: `cmd > file`, `cmd >> file`; the target is created before the command runs, so a bad path fails without running it (output printed by kernel code, e.g. most of `meminfo`, still goes to the console)
+- ✅ Input redirection: `cat < file`
+- ✅ Pipes for built-ins: `cmd1 | cmd2`, multi-stage `cmd1 | cmd2 | cmd3`
+- ✅ One-line error messages: `Error: <what>: <path>[: <reason>]`; "Command not found" only for unknown commands
+- ✅ Tab completion of command names
 - ✅ Directory operations on both RAMFS and SFS
 - ✅ SFS persistence across unmount/remount cycles
-- ✅ Memory management audit with meminfo command
-- ✅ Command history with arrow key navigation
+- ✅ meminfo command
+- ❌ Command history with arrow keys (#32)
+
+### Known Limitations
+- SFS is not mounted at boot: `mkdir /sfs` then `mount ramdisk0 /sfs sfs`
+- `>` after a pipe is not parsed: `cmd1 | cmd2 > file` passes `>` and `file` to `cmd2` as arguments
+- RAMFS cannot move directories; mv across mounts is refused ("invalid argument")
+- `kfree()` is a no-op (bump allocator), so every allocation is permanent
+- Redirection captures only output printed through `shell_print`/`shell_printf`; kernel functions that call `early_print` (e.g. `meminfo`'s reports, mount messages) bypass it
 
 ## Debugging and Development Tips
 

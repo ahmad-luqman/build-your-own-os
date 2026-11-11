@@ -136,6 +136,7 @@ struct inode *sfs_lookup(struct file_system *fs, struct inode *parent, const cha
 int sfs_add_dirent(struct file_system *fs, struct inode *dir_inode, const char *name, uint32_t inode_num);
 int sfs_remove_dirent(struct file_system *fs, struct inode *dir_inode, const char *name);
 int sfs_rename_dirent(struct file_system *fs, struct inode *dir_inode, const char *oldname, const char *newname);
+int sfs_rename(struct file_system *fs, const char *old_path, const char *new_path);
 int sfs_readdir(struct file *dir, void *buffer, size_t buffer_size, off_t *offset);
 
 // SFS utility functions

@@ -122,19 +122,19 @@ int execute_command(struct shell_context *ctx, struct command_line *cmd)
     if (pipe_index != -1) {
         // Ensure both sides of the pipe have commands
         if (pipe_index == 0 || pipe_index >= cmd->argument_count - 1) {
-            shell_print_error("Invalid pipe syntax\n");
+            shell_error("Invalid pipe: missing command before or after '|'");
             return SHELL_EINVAL;
         }
 
         if (!cmd->arguments[pipe_index + 1] || cmd->arguments[pipe_index + 1][0] == '\0') {
-            shell_print_error("Missing command after pipe\n");
+            shell_error("Invalid pipe: missing command after '|'");
             return SHELL_EINVAL;
         }
 
         // Create a simple temp file path using context pointer as unique ID
         char *temp_file = (char *)kmalloc(32);
         if (!temp_file) {
-            shell_print_error("Failed to allocate pipe temp file\n");
+            shell_error("Cannot create pipe: out of memory");
             return SHELL_ENOMEM;
         }
 
@@ -194,6 +194,7 @@ int execute_command(struct shell_context *ctx, struct command_line *cmd)
         left_cmd.arguments = left_args;
         left_cmd.argument_count = pipe_index;
         left_cmd.output_redirect = temp_file;
+        left_cmd.output_is_pipe = 1;
         left_cmd.output_append = 0;
         left_cmd.input_redirect = cmd->input_redirect;  // Pass through input redirect if any
         left_cmd.pipe_next = NULL;
@@ -233,45 +234,67 @@ int execute_command(struct shell_context *ctx, struct command_line *cmd)
     }
 
 
-    // Store output redirection in context so commands can access it
-    // Save the original values
+    // Expose the redirection targets to commands (cat reads input_redirect_file)
     char *saved_output_redirect = ctx->output_redirect_file;
     int saved_append_mode = ctx->output_append_mode;
     char *saved_input_redirect = ctx->input_redirect_file;
     ctx->output_redirect_file = cmd->output_redirect;
     ctx->output_append_mode = cmd->output_append;
     ctx->input_redirect_file = cmd->input_redirect;
-    
-    // Set up I/O redirection if specified
+
+    int result;
+    char redirect_path[SHELL_MAX_PATH_LENGTH];
+
     if (setup_io_redirection(cmd) < 0) {
-        shell_print_error("Failed to set up I/O redirection\n");
-        ctx->output_redirect_file = saved_output_redirect;
-        ctx->output_append_mode = saved_append_mode;
-        ctx->input_redirect_file = saved_input_redirect;
-        return SHELL_ERROR;
+        result = SHELL_ERROR;
+        goto restore;
     }
-    
-    // Try to execute as built-in command first
-    int result = execute_builtin_command(ctx, cmd);
-    
-    if (result == SHELL_ENOENT) {
-        // Command not found as built-in, try external program
-        result = execute_external_program(ctx, cmd);
-        
-        if (result == SHELL_ENOENT) {
-            shell_printf("Command not found: %s\n", cmd->command);
-            ctx->output_redirect_file = saved_output_redirect;
-            ctx->output_append_mode = saved_append_mode;
-            ctx->input_redirect_file = saved_input_redirect;
-            return SHELL_ENOENT;
+
+    // Output redirection: capture everything the command prints via
+    // shell_print() into the target file. Errors still reach the console.
+    if (cmd->output_redirect) {
+        shell_build_full_path(redirect_path, sizeof(redirect_path),
+                              ctx->current_directory, cmd->output_redirect);
+        // An explicit "> file" is created/truncated now, before the command
+        // runs; a pipe temp file is created when output is first flushed.
+        int begin = shell_redirect_begin(redirect_path, cmd->output_append,
+                                         !cmd->output_is_pipe);
+        if (begin != VFS_SUCCESS) {
+            shell_error("Cannot redirect output: %s: %s", redirect_path,
+                        shell_vfs_strerror(begin));
+            result = SHELL_ERROR;
+            goto restore;
         }
     }
-    
-    // Restore context
+
+    // Try to execute as built-in command first
+    result = execute_builtin_command(ctx, cmd);
+    if (result == SHELL_ENOTFOUND) {
+        // Not a built-in, try external program
+        result = execute_external_program(ctx, cmd);
+    }
+
+    if (cmd->output_redirect) {
+        // Unknown command: discard (an explicit target was already created,
+        // as in a Unix shell; a pipe temp file is not)
+        int end = shell_redirect_end(result != SHELL_ENOTFOUND);
+        if (end != VFS_SUCCESS) {
+            shell_error("Cannot write file: %s: %s", redirect_path, shell_vfs_strerror(end));
+            if (result == SHELL_SUCCESS) {
+                result = SHELL_ERROR;
+            }
+        }
+    }
+
+    if (result == SHELL_ENOTFOUND) {
+        shell_error("Command not found: %s", cmd->command);
+    }
+
+restore:
     ctx->output_redirect_file = saved_output_redirect;
     ctx->output_append_mode = saved_append_mode;
     ctx->input_redirect_file = saved_input_redirect;
-    
+
     return result;
 }
 
@@ -305,7 +328,7 @@ int execute_builtin_command(struct shell_context *ctx, struct command_line *cmd)
     // Find command in registry
     struct shell_command *shell_cmd = shell_find_command(cmd->command);
     if (!shell_cmd) {
-        return SHELL_ENOENT;
+        return SHELL_ENOTFOUND;
     }
     
     // Validate argument count, considering input/output redirection
@@ -322,14 +345,14 @@ int execute_builtin_command(struct shell_context *ctx, struct command_line *cmd)
     }
     
     if (effective_min_args >= 0 && cmd->argument_count - 1 < effective_min_args) {
-        shell_printf("Error: %s requires at least %d arguments\n", 
-                    cmd->command, effective_min_args);
+        shell_error("%s: requires at least %d argument(s); see 'help %s'",
+                    cmd->command, effective_min_args, cmd->command);
         return SHELL_EINVAL;
     }
     
     if (shell_cmd->max_args >= 0 && cmd->argument_count - 1 > shell_cmd->max_args) {
-        shell_printf("Error: %s takes at most %d arguments\n", 
-                    cmd->command, shell_cmd->max_args);
+        shell_error("%s: takes at most %d argument(s); see 'help %s'",
+                    cmd->command, shell_cmd->max_args, cmd->command);
         return SHELL_EINVAL;
     }
     
@@ -351,7 +374,7 @@ int execute_external_program(struct shell_context *ctx, struct command_line *cmd
     // 3. Create new process
     // 4. Execute program with arguments
     
-    return SHELL_ENOENT;
+    return SHELL_ENOTFOUND;
 }
 
 // Set up I/O redirection
@@ -361,13 +384,13 @@ int setup_io_redirection(struct command_line *cmd)
         return SHELL_EINVAL;
     }
     
-    // Simple implementation - just validate filenames for now
-    // In the future, this would open files and redirect file descriptors
+    // Validate filenames only; execute_command() performs the redirection
+    // (output via shell_redirect_begin/end, input via ctx->input_redirect_file)
     
     if (cmd->input_redirect) {
         // Validate input file exists
         if (strlen(cmd->input_redirect) == 0) {
-            shell_print_error("Invalid input redirection filename\n");
+            shell_error("Invalid input redirection: missing file name");
             return SHELL_EINVAL;
         }
     }
@@ -375,7 +398,7 @@ int setup_io_redirection(struct command_line *cmd)
     if (cmd->output_redirect) {
         // Validate output filename
         if (strlen(cmd->output_redirect) == 0) {
-            shell_print_error("Invalid output redirection filename\n");
+            shell_error("Invalid output redirection: missing file name");
             return SHELL_EINVAL;
         }
     }

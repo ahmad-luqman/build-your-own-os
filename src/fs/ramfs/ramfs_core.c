@@ -424,7 +424,11 @@ int ramfs_create_file(struct file_system *fs, const char *path, uint32_t mode)
         file_name = last_slash + 1;
     }
 
-    if (!parent || !file_name || file_name[0] == '\0') {
+    if (!parent) {
+        return VFS_ENOENT;  // parent directory does not exist
+    }
+
+    if (!file_name || file_name[0] == '\0') {
         return VFS_EINVAL;
     }
 

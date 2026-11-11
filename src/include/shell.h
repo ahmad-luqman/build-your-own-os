@@ -77,6 +77,7 @@ struct command_line {
     int argument_count;
     char *input_redirect;
     char *output_redirect;
+    int output_is_pipe;             // output_redirect is a pipe temp file (create lazily)
     int output_append;        // 1 if >> (append), 0 if > (truncate)
     int background;
     // Basic pipe support
@@ -95,7 +96,12 @@ size_t shell_get_builtin_command_names(const char **names, size_t max_names);
 void shell_print_prompt(struct shell_context *ctx);
 int shell_read_command(struct shell_context *ctx);
 void shell_print(const char *message);
-void shell_print_error(const char *error);
+void shell_error(const char *format, ...);        // "Error: <msg>\n", never redirected
+const char *shell_vfs_strerror(int vfs_error);    // VFS_E* -> "not found", ...
+int shell_redirect_begin(const char *path, int append, int create_now);  // VFS_E* or 0
+int shell_redirect_end(int commit);                      // flush + close; VFS_E* or 0
+void shell_build_full_path(char *dest, size_t dest_size, const char *current_dir,
+                           const char *path);            // cwd-relative -> normalized absolute
 void shell_printf(const char *format, ...);
 
 // Command parser functions
@@ -147,6 +153,11 @@ void register_shell_syscalls(void);
 #define SHELL_ENOENT           -3
 #define SHELL_EPERM            -4
 #define SHELL_ENOMEM           -5
+// "No such command": returned ONLY by the command lookup (built-in registry,
+// external programs). Built-ins must never return it; a built-in that cannot
+// find a file returns SHELL_ENOENT, which the dispatcher reports as a failure
+// of that command, not as an unknown command.
+#define SHELL_ENOTFOUND        -6
 
 // Phase 7: Advanced shell functions
 int shell_init_advanced_features(struct shell_context *ctx);

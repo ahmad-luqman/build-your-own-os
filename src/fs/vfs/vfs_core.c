@@ -145,6 +145,22 @@ static int vfs_path_is_prefix(const char *path, const char *prefix)
     return 0;
 }
 
+// True if a filesystem is mounted strictly below path (path itself excluded)
+static int vfs_has_mount_below(const char *path)
+{
+    size_t len = strlen(path);
+
+    for (int i = 0; i < MAX_MOUNTS; i++) {
+        const struct vfs_mount *mount = mounts[i];
+        if (mount && strncmp(mount->mountpoint, path, len) == 0 &&
+            mount->mountpoint[len] == '/') {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
 static struct vfs_mount *vfs_find_mount_for_path(const char *path)
 {
     if (!vfs_initialized || !path) {
@@ -718,8 +734,9 @@ int vfs_open(const char *path, int flags, int mode)
                 return VFS_ENOENT;
             }
 
-            if (ramfs_create_file(fs, fs_path, mode ? (uint32_t)mode : 0644) != VFS_SUCCESS) {
-                return VFS_ERROR;
+            int create_result = ramfs_create_file(fs, fs_path, mode ? (uint32_t)mode : 0644);
+            if (create_result != VFS_SUCCESS) {
+                return create_result;
             }
 
             node = vfs_ramfs_resolve(fs, fs_path);
@@ -1058,70 +1075,47 @@ int vfs_rename(const char *oldpath, const char *newpath)
     }
 
     struct file_system *fs = old_mount->fs;
+    const char *old_fs_path = vfs_path_within_mount(old_mount, oldpath);
+    const char *new_fs_path = vfs_path_within_mount(new_mount, newpath);
 
-    // Handle SFS rename
+    // Checks shared by every filesystem. Paths are absolute and normalized.
+    // A mount root can be neither moved nor replaced.
+    if (strcmp(old_fs_path, "/") == 0 || strcmp(new_fs_path, "/") == 0) {
+        return VFS_EPERM;
+    }
+
+    // Same path: refuse. (RAMFS would otherwise truncate the destination,
+    // which is the source, and then unlink it.)
+    if (strcmp(oldpath, newpath) == 0) {
+        return VFS_EINVAL;
+    }
+
+    // A directory cannot move into its own subtree.
+    size_t old_len = strlen(oldpath);
+    if (strncmp(newpath, oldpath, old_len) == 0 && newpath[old_len] == '/') {
+        return VFS_EINVAL;
+    }
+
+    // Refuse to move a directory with a filesystem mounted inside it: the
+    // mount table stores absolute mountpoints, which would keep pointing at
+    // the old path.
+    if (vfs_has_mount_below(oldpath)) {
+        return VFS_EBUSY;
+    }
+
+    struct inode stat_buf;
+    if (vfs_stat(oldpath, &stat_buf) != VFS_SUCCESS) {
+        return VFS_ENOENT;
+    }
+
+    // Never overwrite: there is no "mv -f", so refuse instead of losing data.
+    if (vfs_stat(newpath, &stat_buf) == VFS_SUCCESS) {
+        return VFS_EEXIST;
+    }
+
+    // SFS: relink the directory entry (files and directories, any parent)
     if (fs->type == &sfs_fs_type) {
-        // Get parent directories for both paths
-        char *old_dirname = vfs_get_dirname(oldpath);
-        char *new_dirname = vfs_get_dirname(newpath);
-
-        if (!old_dirname || !new_dirname) {
-            if (old_dirname) kfree(old_dirname);
-            if (new_dirname) kfree(new_dirname);
-            return VFS_EINVAL;
-        }
-
-        // Check if both files are in the same directory
-        int same_dir = (strcmp(old_dirname, new_dirname) == 0);
-        kfree(old_dirname);
-        kfree(new_dirname);
-
-        if (!same_dir) {
-            // Moving across directories not supported yet in SFS
-            return VFS_EINVAL;
-        }
-
-        // Get the old and new filenames
-        const char *oldname = vfs_get_filename(oldpath);
-        const char *newname = vfs_get_filename(newpath);
-
-        if (!oldname || !newname) {
-            return VFS_EINVAL;
-        }
-
-        // Get the parent directory inode
-        const char *old_fs_path = vfs_path_within_mount(old_mount, oldpath);
-        struct inode *old_inode = sfs_resolve_path(fs, old_fs_path);
-        if (!old_inode) {
-            return VFS_ENOENT;
-        }
-
-        // Check that it's a file, not a directory
-        struct sfs_inode_data *inode_data = (struct sfs_inode_data *)old_inode->private_data;
-        if (!inode_data || (inode_data->disk_inode.mode & SFS_TYPE_DIRECTORY)) {
-            sfs_put_inode(old_inode);
-            return VFS_EINVAL;
-        }
-        sfs_put_inode(old_inode);
-
-        // Get parent directory
-        char *parent_path = vfs_get_dirname(oldpath);
-        if (!parent_path) {
-            return VFS_EINVAL;
-        }
-
-        const char *parent_fs_path = vfs_path_within_mount(old_mount, parent_path);
-        struct inode *parent_inode = sfs_resolve_path(fs, parent_fs_path);
-        kfree(parent_path);
-
-        if (!parent_inode) {
-            return VFS_ENOENT;
-        }
-
-        // Perform the rename
-        int result = sfs_rename_dirent(fs, parent_inode, oldname, newname);
-        sfs_put_inode(parent_inode);
-        return result;
+        return sfs_rename(fs, old_fs_path, new_fs_path);
     }
 
     // Handle RAMFS rename (existing code)
@@ -1129,9 +1123,7 @@ int vfs_rename(const char *oldpath, const char *newpath)
         return VFS_EINVAL;
     }
 
-    // Get path relative to mount point for validation
-    const char *old_fs_path = vfs_path_within_mount(old_mount, oldpath);
-
+    // RAMFS: copy then unlink (files only)
     struct ramfs_node *node = vfs_ramfs_resolve(fs, old_fs_path);
     if (!node) {
         return VFS_ENOENT;
