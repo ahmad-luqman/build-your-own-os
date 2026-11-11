@@ -47,6 +47,7 @@ struct inode;
 #define VFS_ENOMEM        -6
 #define VFS_ENOSPC        -7
 #define VFS_EIO           -8
+#define VFS_ENOTDIR       -9
 
 // File operations structure
 struct file_operations {

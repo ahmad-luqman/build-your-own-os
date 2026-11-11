@@ -488,7 +488,36 @@ int cmd_mv(struct shell_context *ctx, int argc, char *argv[])
     
     shell_build_full_path(src_path, sizeof(src_path), ctx->current_directory, source);
     shell_build_full_path(dst_path, sizeof(dst_path), ctx->current_directory, dest);
-    
+
+    // "mv x dir" moves x into dir, keeping its name
+    struct inode dst_stat;
+    if (strcmp(src_path, dst_path) != 0 &&
+        vfs_stat(dst_path, &dst_stat) == VFS_SUCCESS &&
+        (dst_stat.mode & VFS_FILE_DIRECTORY)) {
+        const char *base = vfs_get_filename(src_path);
+        size_t len = strlen(dst_path);
+        int need_slash = strcmp(dst_path, "/") != 0;
+        if (len + (size_t)need_slash + strlen(base) >= sizeof(dst_path)) {
+            shell_error("Cannot move %s to %s: path too long", src_path, dst_path);
+            return SHELL_EINVAL;
+        }
+        if (need_slash) {
+            dst_path[len++] = '/';
+        }
+        strcpy(dst_path + len, base);
+    }
+
+    if (strcmp(src_path, dst_path) == 0) {
+        shell_error("Cannot move %s: source and destination are the same", src_path);
+        return SHELL_EINVAL;
+    }
+
+    size_t src_len = strlen(src_path);
+    if (strncmp(dst_path, src_path, src_len) == 0 && dst_path[src_len] == '/') {
+        shell_error("Cannot move %s to %s: destination is inside the source", src_path, dst_path);
+        return SHELL_EINVAL;
+    }
+
     // Use VFS rename operation
     int result = vfs_rename(src_path, dst_path);
     if (result != VFS_SUCCESS) {

@@ -1260,6 +1260,102 @@ out:
     return result;
 }
 
+/*
+ * Move/rename old_path to new_path (both relative to this SFS mount) by
+ * relinking the directory entry: the inode, and therefore the file data or
+ * directory contents, is untouched. Works for files and directories.
+ *
+ * SFS directories hold no "." or ".." entries, so moving a directory needs
+ * no fix-up inside it. The caller (vfs_rename) rejects moving a directory
+ * into its own subtree, which SFS cannot detect without parent links.
+ *
+ * Across directories the new entry is added before the old one is removed:
+ * a failure in between leaves the inode reachable from both names, never
+ * from neither. If the removal fails, the new entry is rolled back.
+ */
+int sfs_rename(struct file_system *fs, const char *old_path, const char *new_path)
+{
+    if (!fs || !old_path || !new_path) {
+        return VFS_EINVAL;
+    }
+
+    if (strcmp(old_path, "/") == 0 || strcmp(new_path, "/") == 0) {
+        return VFS_EPERM;
+    }
+
+    const char *new_base = vfs_get_filename(new_path);
+    size_t new_len = new_base ? strlen(new_base) : 0;
+    if (new_len == 0 || new_len >= SFS_MAX_NAME) {
+        return VFS_EINVAL;
+    }
+
+    char old_name[SFS_MAX_NAME];
+    char new_name[SFS_MAX_NAME];
+    struct inode *old_parent = NULL;
+    struct inode *new_parent = NULL;
+    struct inode *source = NULL;
+    struct inode *existing = NULL;
+
+    int result = sfs_extract_parent(fs, old_path, &old_parent, old_name);
+    if (result != VFS_SUCCESS) {
+        return result;
+    }
+
+    source = sfs_dir_lookup(fs, old_parent, old_name);
+    if (!source) {
+        result = VFS_ENOENT;
+        goto out;
+    }
+
+    result = sfs_extract_parent(fs, new_path, &new_parent, new_name);
+    if (result != VFS_SUCCESS) {
+        new_parent = NULL;
+        goto out;
+    }
+
+    struct sfs_inode_data *new_parent_data = (struct sfs_inode_data *)new_parent->private_data;
+    if (!new_parent_data || (new_parent_data->disk_inode.mode & SFS_TYPE_DIRECTORY) == 0) {
+        result = VFS_ENOTDIR;
+        goto out;
+    }
+
+    // Explicit lookup: sfs_add_dirent's own EEXIST check stops at the first
+    // free slot and misses a duplicate stored after a hole.
+    existing = sfs_dir_lookup(fs, new_parent, new_name);
+    if (existing) {
+        result = VFS_EEXIST;
+        goto out;
+    }
+
+    if (old_parent->ino == new_parent->ino) {
+        result = sfs_rename_dirent(fs, old_parent, old_name, new_name);
+        goto out;
+    }
+
+    result = sfs_add_dirent(fs, new_parent, new_name, source->ino);
+    if (result != VFS_SUCCESS) {
+        goto out;
+    }
+
+    result = sfs_remove_dirent(fs, old_parent, old_name);
+    if (result != VFS_SUCCESS) {
+        sfs_remove_dirent(fs, new_parent, new_name);
+    }
+
+out:
+    if (existing) {
+        sfs_put_inode(existing);
+    }
+    if (source) {
+        sfs_put_inode(source);
+    }
+    if (new_parent) {
+        sfs_put_inode(new_parent);
+    }
+    sfs_put_inode(old_parent);
+    return result;
+}
+
 int sfs_create_file(struct file_system *fs, const char *path, uint32_t mode)
 {
     if (!fs || !path) {

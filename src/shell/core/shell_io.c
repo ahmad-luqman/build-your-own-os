@@ -576,6 +576,7 @@ const char *shell_vfs_strerror(int code)
         case VFS_ENOMEM:  return "out of memory";
         case VFS_ENOSPC:  return "no space left on device";
         case VFS_EIO:     return "I/O error";
+        case VFS_ENOTDIR: return "not a directory";
         default:          return "failed";
     }
 }
