@@ -235,31 +235,33 @@ void history_display_all(struct history_context *hist) {
     
     struct history_entry *entry = hist->head;
     int index = 1;
-    
+
     while (entry) {
-        // Would display history here
+        shell_printf("%d  %s\n", index, entry->command);
         entry = entry->next;
         index++;
     }
 }
 
-// Display recent history entries
+// Display the last `count` history entries, numbered by their absolute
+// position (1-based) so the numbers match history_get_entry().
 void history_display_recent(struct history_context *hist, int count) {
     if (!hist || count <= 0) {
         return;
     }
-    
-    // Find starting point
-    struct history_entry *entry = hist->tail;
-    int entries_to_skip = hist->count - count;
-    
-    for (int i = 0; i < entries_to_skip && entry; i++) {
-        entry = entry->prev;
+    if (count > hist->count) {
+        count = hist->count;
     }
-    
-    // Display entries (simplified)
-    int index = hist->count - count + 1;
+
+    // Walk forward from the head past the entries we are not showing
+    struct history_entry *entry = hist->head;
+    int index = 1;
+    for (; index <= hist->count - count && entry; index++) {
+        entry = entry->next;
+    }
+
     while (entry) {
+        shell_printf("%d  %s\n", index, entry->command);
         entry = entry->next;
         index++;
     }
