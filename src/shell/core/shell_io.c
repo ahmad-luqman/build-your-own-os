@@ -6,6 +6,7 @@
 #include "shell.h"
 #include "kernel.h"
 #include "shell_completion.h"
+#include "vfs.h"
 #include <stdarg.h>
 #include <string.h>
 
@@ -298,8 +299,17 @@ int shell_read_command(struct shell_context *ctx)
     
     // Command too long
     ctx->command_buffer[pos] = '\0';
-    shell_print_error("\nCommand too long\n");
+    shell_print("\n");
+    shell_error("Command too long");
     return SHELL_ERROR;
+}
+
+// Write straight to the console. Errors always take this path, so they stay
+// on screen even while a command's normal output is redirected (stderr vs
+// stdout).
+static void shell_console_write(const char *message)
+{
+    early_print(message);
 }
 
 // Print message to output
@@ -308,20 +318,100 @@ void shell_print(const char *message)
     if (!message) {
         return;
     }
-    
-    // Use early_print for output (same as kernel messages)
-    early_print(message);
+
+    shell_console_write(message);
 }
 
-// Print error message
-void shell_print_error(const char *error)
+// Format into buf (always NUL-terminated). Supports %s, %d, %x and %%.
+static void shell_vformat(char *buf, size_t size, const char *format, va_list ap)
 {
-    if (!error) {
+    size_t pos = 0;
+
+    if (!buf || size == 0) {
         return;
     }
-    
-    shell_print("Error: ");
-    shell_print(error);
+
+    for (const char *p = format; *p && pos < size - 1; ++p) {
+        if (*p != '%' || *(p + 1) == '\0') {
+            buf[pos++] = *p;
+            continue;
+        }
+
+        ++p;  // Skip '%'
+
+        switch (*p) {
+            case 's': {
+                const char *str = va_arg(ap, const char *);
+                if (!str) {
+                    str = "(null)";
+                }
+                while (*str && pos < size - 1) {
+                    buf[pos++] = *str++;
+                }
+                break;
+            }
+            case 'd': {
+                int value = va_arg(ap, int);
+                char temp[16];
+                int idx = 0;
+                if (value < 0) {
+                    if (pos < size - 1) {
+                        buf[pos++] = '-';
+                    }
+                    value = -value;
+                }
+                if (value == 0) {
+                    if (pos < size - 1) {
+                        buf[pos++] = '0';
+                    }
+                    break;
+                }
+                while (value > 0 && idx < (int)sizeof(temp)) {
+                    temp[idx++] = (char)('0' + (value % 10));
+                    value /= 10;
+                }
+                while (idx-- > 0 && pos < size - 1) {
+                    buf[pos++] = temp[idx];
+                }
+                break;
+            }
+            case 'x': {
+                unsigned int value = va_arg(ap, unsigned int);
+                char temp[16];
+                int idx = 0;
+                if (value == 0) {
+                    if (pos < size - 1) {
+                        buf[pos++] = '0';
+                    }
+                    break;
+                }
+                while (value > 0 && idx < (int)sizeof(temp)) {
+                    unsigned int digit = value & 0xF;
+                    temp[idx++] = (char)((digit < 10) ? '0' + digit : 'a' + (digit - 10));
+                    value >>= 4;
+                }
+                while (idx-- > 0 && pos < size - 1) {
+                    buf[pos++] = temp[idx];
+                }
+                break;
+            }
+            case '%':
+                if (pos < size - 1) {
+                    buf[pos++] = '%';
+                }
+                break;
+            default:
+                if (pos < size - 1) {
+                    buf[pos++] = '%';
+                }
+                if (pos < size - 1) {
+                    buf[pos++] = *p;
+                }
+                break;
+        }
+    }
+
+    buf[pos] = '\0';
 }
 
 // Simple printf implementation for shell
@@ -332,93 +422,45 @@ void shell_printf(const char *format, ...)
     }
 
     char buffer[512];
-    size_t pos = 0;
-
     va_list args;
     va_start(args, format);
-
-    for (const char *p = format; *p && pos < sizeof(buffer) - 1; ++p) {
-        if (*p != '%' || *(p + 1) == '\0') {
-            buffer[pos++] = *p;
-            continue;
-        }
-
-        ++p;  // Skip '%'
-
-        switch (*p) {
-            case 's': {
-                const char *str = va_arg(args, const char *);
-                if (!str) {
-                    str = "(null)";
-                }
-                while (*str && pos < sizeof(buffer) - 1) {
-                    buffer[pos++] = *str++;
-                }
-                break;
-            }
-            case 'd': {
-                int value = va_arg(args, int);
-                char temp[16];
-                int idx = 0;
-                if (value < 0) {
-                    if (pos < sizeof(buffer) - 1) {
-                        buffer[pos++] = '-';
-                    }
-                    value = -value;
-                }
-                if (value == 0) {
-                    if (pos < sizeof(buffer) - 1) {
-                        buffer[pos++] = '0';
-                    }
-                    break;
-                }
-                while (value > 0 && idx < (int)sizeof(temp)) {
-                    temp[idx++] = (char)('0' + (value % 10));
-                    value /= 10;
-                }
-                while (idx-- > 0 && pos < sizeof(buffer) - 1) {
-                    buffer[pos++] = temp[idx];
-                }
-                break;
-            }
-            case 'x': {
-                unsigned int value = va_arg(args, unsigned int);
-                char temp[16];
-                int idx = 0;
-                if (value == 0) {
-                    if (pos < sizeof(buffer) - 1) {
-                        buffer[pos++] = '0';
-                    }
-                    break;
-                }
-                while (value > 0 && idx < (int)sizeof(temp)) {
-                    unsigned int digit = value & 0xF;
-                    temp[idx++] = (char)((digit < 10) ? '0' + digit : 'a' + (digit - 10));
-                    value >>= 4;
-                }
-                while (idx-- > 0 && pos < sizeof(buffer) - 1) {
-                    buffer[pos++] = temp[idx];
-                }
-                break;
-            }
-            case '%':
-                if (pos < sizeof(buffer) - 1) {
-                    buffer[pos++] = '%';
-                }
-                break;
-            default:
-                if (pos < sizeof(buffer) - 1) {
-                    buffer[pos++] = '%';
-                }
-                if (pos < sizeof(buffer) - 1) {
-                    buffer[pos++] = *p;
-                }
-                break;
-        }
-    }
-
+    shell_vformat(buffer, sizeof(buffer), format, args);
     va_end(args);
 
-    buffer[pos] = '\0';
     shell_print(buffer);
+}
+
+// Print one error line: "Error: <formatted message>\n". Callers pass the
+// whole message in one call and no trailing newline, conventionally
+// "<what>: <path>[: <reason>]".
+void shell_error(const char *format, ...)
+{
+    if (!format) {
+        return;
+    }
+
+    char buffer[512];
+    va_list args;
+    va_start(args, format);
+    shell_vformat(buffer, sizeof(buffer), format, args);
+    va_end(args);
+
+    shell_console_write("Error: ");
+    shell_console_write(buffer);
+    shell_console_write("\n");
+}
+
+// Human-readable reason for a VFS_* error code.
+const char *shell_vfs_strerror(int code)
+{
+    switch (code) {
+        case VFS_ENOENT:  return "not found";
+        case VFS_EEXIST:  return "already exists";
+        case VFS_EINVAL:  return "invalid argument";
+        case VFS_EPERM:   return "operation not permitted";
+        case VFS_ENOMEM:  return "out of memory";
+        case VFS_ENOSPC:  return "no space left on device";
+        case VFS_EIO:     return "I/O error";
+        default:          return "failed";
+    }
 }

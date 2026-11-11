@@ -122,19 +122,19 @@ int execute_command(struct shell_context *ctx, struct command_line *cmd)
     if (pipe_index != -1) {
         // Ensure both sides of the pipe have commands
         if (pipe_index == 0 || pipe_index >= cmd->argument_count - 1) {
-            shell_print_error("Invalid pipe syntax\n");
+            shell_error("Invalid pipe: missing command before or after '|'");
             return SHELL_EINVAL;
         }
 
         if (!cmd->arguments[pipe_index + 1] || cmd->arguments[pipe_index + 1][0] == '\0') {
-            shell_print_error("Missing command after pipe\n");
+            shell_error("Invalid pipe: missing command after '|'");
             return SHELL_EINVAL;
         }
 
         // Create a simple temp file path using context pointer as unique ID
         char *temp_file = (char *)kmalloc(32);
         if (!temp_file) {
-            shell_print_error("Failed to allocate pipe temp file\n");
+            shell_error("Cannot create pipe: out of memory");
             return SHELL_ENOMEM;
         }
 
@@ -244,7 +244,7 @@ int execute_command(struct shell_context *ctx, struct command_line *cmd)
     
     // Set up I/O redirection if specified
     if (setup_io_redirection(cmd) < 0) {
-        shell_print_error("Failed to set up I/O redirection\n");
+        shell_error("Cannot set up I/O redirection");
         ctx->output_redirect_file = saved_output_redirect;
         ctx->output_append_mode = saved_append_mode;
         ctx->input_redirect_file = saved_input_redirect;
@@ -259,7 +259,7 @@ int execute_command(struct shell_context *ctx, struct command_line *cmd)
         result = execute_external_program(ctx, cmd);
         
         if (result == SHELL_ENOTFOUND) {
-            shell_printf("Command not found: %s\n", cmd->command);
+            shell_error("Command not found: %s", cmd->command);
             ctx->output_redirect_file = saved_output_redirect;
             ctx->output_append_mode = saved_append_mode;
             ctx->input_redirect_file = saved_input_redirect;
@@ -322,14 +322,14 @@ int execute_builtin_command(struct shell_context *ctx, struct command_line *cmd)
     }
     
     if (effective_min_args >= 0 && cmd->argument_count - 1 < effective_min_args) {
-        shell_printf("Error: %s requires at least %d arguments\n", 
-                    cmd->command, effective_min_args);
+        shell_error("%s: requires at least %d argument(s); see 'help %s'",
+                    cmd->command, effective_min_args, cmd->command);
         return SHELL_EINVAL;
     }
     
     if (shell_cmd->max_args >= 0 && cmd->argument_count - 1 > shell_cmd->max_args) {
-        shell_printf("Error: %s takes at most %d arguments\n", 
-                    cmd->command, shell_cmd->max_args);
+        shell_error("%s: takes at most %d argument(s); see 'help %s'",
+                    cmd->command, shell_cmd->max_args, cmd->command);
         return SHELL_EINVAL;
     }
     
@@ -367,7 +367,7 @@ int setup_io_redirection(struct command_line *cmd)
     if (cmd->input_redirect) {
         // Validate input file exists
         if (strlen(cmd->input_redirect) == 0) {
-            shell_print_error("Invalid input redirection filename\n");
+            shell_error("Invalid input redirection: missing file name");
             return SHELL_EINVAL;
         }
     }
@@ -375,7 +375,7 @@ int setup_io_redirection(struct command_line *cmd)
     if (cmd->output_redirect) {
         // Validate output filename
         if (strlen(cmd->output_redirect) == 0) {
-            shell_print_error("Invalid output redirection filename\n");
+            shell_error("Invalid output redirection: missing file name");
             return SHELL_EINVAL;
         }
     }

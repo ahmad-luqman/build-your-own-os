@@ -195,7 +195,7 @@ run_arch() {
     check "cd /nowhere: one line, path + reason"  one_error "$(b "cd /nowhere")" "/nowhere" "not found"
     check "mkdir /tmp: one line, path + reason"   one_error "$(b "mkdir /tmp")" "/tmp" "exists"
     check "nosuchcmd: one line"                   one_error "$(b "nosuchcmd")" "nosuchcmd"
-    check "cat (no args): one line, usage hint"   one_error "$(b "cat")" "cat" "help cat"
+    check "cat (no args): one line, usage hint"   one_error "$(b "cat")" "usage: cat"
 
     echo "  -- #29 redirection and pipes"
     check "ls > file: nothing on the console"      empty "$(b "ls /tmp/d > /tmp/ls.txt")"

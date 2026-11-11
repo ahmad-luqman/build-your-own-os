@@ -159,7 +159,7 @@ void shell_run(struct shell_context *ctx)
             execute_command(ctx, &cmd);
             free_command_line(&cmd);
         } else {
-            early_print("Failed to parse command\n");
+            shell_error("Cannot parse command");
         }
         
         shell_print("\n");

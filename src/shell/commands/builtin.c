@@ -128,7 +128,7 @@ int cmd_cd(struct shell_context *ctx, int argc, char *argv[])
     
     // Simple path validation
     if (strlen(path) >= SHELL_MAX_PATH_LENGTH) {
-        shell_print_error("Path too long\n");
+        shell_error("Cannot change directory: path too long");
         return SHELL_EINVAL;
     }
     
@@ -138,18 +138,16 @@ int cmd_cd(struct shell_context *ctx, int argc, char *argv[])
     
     // Validate that directory exists using VFS
     struct inode stat_buf;
-    if (vfs_stat(full_path, &stat_buf) != VFS_SUCCESS) {
-        shell_print_error("Directory not found: ");
-        shell_print_error(full_path);
-        shell_print_error("\n");
+    int stat_result = vfs_stat(full_path, &stat_buf);
+    if (stat_result != VFS_SUCCESS) {
+        shell_error("Cannot change directory: %s: %s", full_path,
+                    shell_vfs_strerror(stat_result));
         return SHELL_ENOENT;
     }
     
     // Check if it's actually a directory
     if ((stat_buf.mode & VFS_FILE_DIRECTORY) == 0) {
-        shell_print_error("Not a directory: ");
-        shell_print_error(full_path);
-        shell_print_error("\n");
+        shell_error("Cannot change directory: %s: not a directory", full_path);
         return SHELL_EINVAL;
     }
     
@@ -210,9 +208,7 @@ int cmd_ls(struct shell_context *ctx, int argc, char *argv[])
     // Try to open directory using VFS
     int fd = vfs_open(full_path, VFS_O_RDONLY, 0);
     if (fd < 0) {
-        shell_print_error("Cannot open directory: ");
-        shell_print_error(full_path);
-        shell_print_error("\n");
+        shell_error("Cannot open directory: %s: %s", full_path, shell_vfs_strerror(fd));
         return SHELL_ENOENT;
     }
     
@@ -221,7 +217,7 @@ int cmd_ls(struct shell_context *ctx, int argc, char *argv[])
     int count = vfs_readdir(fd, entries, 16);
     
     if (count < 0) {
-        shell_print_error("Failed to read directory\n");
+        shell_error("Cannot read directory: %s: %s", full_path, shell_vfs_strerror(count));
         vfs_close(fd);
         return SHELL_ERROR;
     }
@@ -276,7 +272,7 @@ int cmd_cat(struct shell_context *ctx, int argc, char *argv[])
         // Normal usage: cat filename
         filename = argv[1];
     } else {
-        shell_print_error("Usage: cat <filename> or cat < <filename>\n");
+        shell_error("cat: missing file operand; usage: cat <file> or cat < <file>");
         return SHELL_EINVAL;
     }
     
@@ -287,10 +283,7 @@ int cmd_cat(struct shell_context *ctx, int argc, char *argv[])
     // Open file using VFS
     int fd = vfs_open(full_path, VFS_O_RDONLY, 0);
     if (fd < 0) {
-        shell_print_error("Cannot open file: ");
-        shell_print_error(full_path);
-        shell_print_error("\n");
-        shell_print_error("Hint: Check if the file exists with 'ls' or create it with 'touch'\n");
+        shell_error("Cannot open file: %s: %s", full_path, shell_vfs_strerror(fd));
         return SHELL_ENOENT;
     }
     
@@ -304,7 +297,8 @@ int cmd_cat(struct shell_context *ctx, int argc, char *argv[])
     }
     
     if (bytes_read < 0) {
-        shell_print_error("\nError reading file\n");
+        shell_print("\n");
+        shell_error("Cannot read file: %s: %s", full_path, shell_vfs_strerror((int)bytes_read));
         vfs_close(fd);
         return SHELL_ERROR;
     }
@@ -317,7 +311,7 @@ int cmd_cat(struct shell_context *ctx, int argc, char *argv[])
 int cmd_mkdir(struct shell_context *ctx, int argc, char *argv[])
 {
     if (!ctx || argc < 2) {
-        shell_print_error("Usage: mkdir <directory>\n");
+        shell_error("mkdir: missing operand; usage: mkdir <directory>");
         return SHELL_EINVAL;
     }
     
@@ -331,9 +325,7 @@ int cmd_mkdir(struct shell_context *ctx, int argc, char *argv[])
     int result = vfs_mkdir(full_path, 0755);
 
     if (result != VFS_SUCCESS) {
-        shell_print_error("Failed to create directory: ");
-        shell_print_error(full_path);
-        shell_print_error("\n");
+        shell_error("Cannot create directory: %s: %s", full_path, shell_vfs_strerror(result));
         return SHELL_ERROR;
     }
 
@@ -345,7 +337,7 @@ int cmd_mkdir(struct shell_context *ctx, int argc, char *argv[])
 int cmd_rmdir(struct shell_context *ctx, int argc, char *argv[])
 {
     if (!ctx || argc < 2) {
-        shell_print_error("Usage: rmdir <directory>\n");
+        shell_error("rmdir: missing operand; usage: rmdir <directory>");
         return SHELL_EINVAL;
     }
     
@@ -358,9 +350,7 @@ int cmd_rmdir(struct shell_context *ctx, int argc, char *argv[])
     // Remove directory using VFS
     int result = vfs_rmdir(full_path);
     if (result != VFS_SUCCESS) {
-        shell_print_error("Failed to remove directory: ");
-        shell_print_error(full_path);
-        shell_print_error("\n");
+        shell_error("Cannot remove directory: %s: %s", full_path, shell_vfs_strerror(result));
         return SHELL_ERROR;
     }
     
@@ -372,7 +362,7 @@ int cmd_rmdir(struct shell_context *ctx, int argc, char *argv[])
 int cmd_rm(struct shell_context *ctx, int argc, char *argv[])
 {
     if (!ctx || argc < 2) {
-        shell_print_error("Usage: rm [-f] <filename>\n");
+        shell_error("rm: missing operand; usage: rm [-f] <file>");
         return SHELL_EINVAL;
     }
     
@@ -395,7 +385,7 @@ int cmd_rm(struct shell_context *ctx, int argc, char *argv[])
     }
     
     if (!filename) {
-        shell_print_error("No filename specified\n");
+        shell_error("rm: missing file operand; usage: rm [-f] <file>");
         return SHELL_EINVAL;
     }
     
@@ -407,9 +397,7 @@ int cmd_rm(struct shell_context *ctx, int argc, char *argv[])
     int result = vfs_unlink(full_path);
     if (result != VFS_SUCCESS) {
         if (!force) {
-            shell_print_error("Failed to remove file: ");
-            shell_print_error(full_path);
-            shell_print_error("\n");
+            shell_error("Cannot remove file: %s: %s", full_path, shell_vfs_strerror(result));
             return SHELL_ERROR;
         }
         // With -f flag, ignore errors
@@ -423,7 +411,7 @@ int cmd_rm(struct shell_context *ctx, int argc, char *argv[])
 int cmd_cp(struct shell_context *ctx, int argc, char *argv[])
 {
     if (!ctx || argc < 3) {
-        shell_print_error("Usage: cp <source> <destination>\n");
+        shell_error("cp: missing operand; usage: cp <source> <destination>");
         return SHELL_EINVAL;
     }
     
@@ -440,18 +428,15 @@ int cmd_cp(struct shell_context *ctx, int argc, char *argv[])
     // Open source file
     int src_fd = vfs_open(src_path, VFS_O_RDONLY, 0);
     if (src_fd < 0) {
-        shell_print_error("Cannot open source file: ");
-        shell_print_error(src_path);
-        shell_print_error("\n");
+        shell_error("Cannot open source file: %s: %s", src_path, shell_vfs_strerror(src_fd));
         return SHELL_ENOENT;
     }
     
     // Open/create destination file
     int dst_fd = vfs_open(dst_path, VFS_O_WRONLY | VFS_O_CREAT | VFS_O_TRUNC, 0644);
     if (dst_fd < 0) {
-        shell_print_error("Cannot create destination file: ");
-        shell_print_error(dst_path);
-        shell_print_error("\n");
+        shell_error("Cannot create destination file: %s: %s", dst_path,
+                    shell_vfs_strerror(dst_fd));
         vfs_close(src_fd);
         return SHELL_ERROR;
     }
@@ -464,7 +449,8 @@ int cmd_cp(struct shell_context *ctx, int argc, char *argv[])
     while ((bytes_read = vfs_read(src_fd, buffer, sizeof(buffer))) > 0) {
         bytes_written = vfs_write(dst_fd, buffer, bytes_read);
         if (bytes_written != bytes_read) {
-            shell_print_error("Write error during copy\n");
+            shell_error("Cannot write file: %s: %s", dst_path,
+                        shell_vfs_strerror(bytes_written < 0 ? (int)bytes_written : VFS_ENOSPC));
             vfs_close(src_fd);
             vfs_close(dst_fd);
             return SHELL_ERROR;
@@ -472,7 +458,7 @@ int cmd_cp(struct shell_context *ctx, int argc, char *argv[])
     }
 
     if (bytes_read < 0) {
-        shell_print_error("Read error during copy\n");
+        shell_error("Cannot read file: %s: %s", src_path, shell_vfs_strerror((int)bytes_read));
         vfs_close(src_fd);
         vfs_close(dst_fd);
         return SHELL_ERROR;
@@ -489,7 +475,7 @@ int cmd_cp(struct shell_context *ctx, int argc, char *argv[])
 int cmd_mv(struct shell_context *ctx, int argc, char *argv[])
 {
     if (!ctx || argc < 3) {
-        shell_print_error("Usage: mv <source> <destination>\n");
+        shell_error("mv: missing operand; usage: mv <source> <destination>");
         return SHELL_EINVAL;
     }
     
@@ -506,9 +492,7 @@ int cmd_mv(struct shell_context *ctx, int argc, char *argv[])
     // Use VFS rename operation
     int result = vfs_rename(src_path, dst_path);
     if (result != VFS_SUCCESS) {
-        shell_print_error("Failed to move/rename file: ");
-        shell_print_error(src_path);
-        shell_print_error("\n");
+        shell_error("Cannot move %s to %s: %s", src_path, dst_path, shell_vfs_strerror(result));
         return SHELL_ERROR;
     }
     
@@ -542,9 +526,7 @@ int cmd_echo(struct shell_context *ctx, int argc, char *argv[])
         
         int fd = vfs_open(full_path, flags, 0644);
         if (fd < 0) {
-            shell_print_error("Cannot create file: ");
-            shell_print_error(full_path);
-            shell_print_error("\n");
+            shell_error("Cannot create file: %s: %s", full_path, shell_vfs_strerror(fd));
             return SHELL_ERROR;
         }
         
@@ -568,7 +550,7 @@ int cmd_echo(struct shell_context *ctx, int argc, char *argv[])
         vfs_close(fd);
         
         if (written < 0) {
-            shell_print_error("Error writing to file\n");
+            shell_error("Cannot write file: %s: %s", full_path, shell_vfs_strerror((int)written));
             return SHELL_ERROR;
         }
         
@@ -596,7 +578,7 @@ int cmd_touch(struct shell_context *ctx, int argc, char *argv[])
     }
     
     if (argc < 2) {
-        shell_print_error("Usage: touch <file>\n");
+        shell_error("touch: missing operand; usage: touch <file>");
         return SHELL_EINVAL;
     }
     
@@ -617,9 +599,7 @@ int cmd_touch(struct shell_context *ctx, int argc, char *argv[])
     // File doesn't exist - create it
     fd = vfs_open(full_path, VFS_O_WRONLY | VFS_O_CREAT, 0644);
     if (fd < 0) {
-        shell_print_error("Cannot create file: ");
-        shell_print_error(full_path);
-        shell_print_error("\n");
+        shell_error("Cannot create file: %s: %s", full_path, shell_vfs_strerror(fd));
         return SHELL_ERROR;
     }
     
@@ -633,7 +613,7 @@ int cmd_mkfs(struct shell_context *ctx, int argc, char *argv[])
     (void)ctx;
 
     if (argc < 2) {
-        shell_print_error("Usage: mkfs <device> [sfs]\n");
+        shell_error("mkfs: missing operand; usage: mkfs <device> [sfs]");
         return SHELL_EINVAL;
     }
 
@@ -641,21 +621,19 @@ int cmd_mkfs(struct shell_context *ctx, int argc, char *argv[])
     const char *fs_name = (argc >= 3) ? argv[2] : "sfs";
 
     if (strcmp(fs_name, "sfs") != 0) {
-        shell_print_error("Unsupported filesystem type\n");
+        shell_error("Cannot format %s: unsupported filesystem type: %s", device_name, fs_name);
         return SHELL_EINVAL;
     }
 
     struct block_device *dev = block_device_find(device_name);
     if (!dev) {
-        shell_print_error("Block device not found: ");
-        shell_print_error(device_name);
-        shell_print_error("\n");
+        shell_error("Cannot format %s: block device not found", device_name);
         return SHELL_ENOENT;
     }
 
     int result = sfs_format(dev);
     if (result != VFS_SUCCESS) {
-        shell_printf("Format failed (code %d)\n", result);
+        shell_error("Cannot format %s: %s", device_name, shell_vfs_strerror(result));
         return SHELL_ERROR;
     }
 
@@ -669,7 +647,7 @@ int cmd_mount(struct shell_context *ctx, int argc, char *argv[])
     (void)ctx;
 
     if (argc < 3) {
-        shell_print_error("Usage: mount <device> <mountpoint> [fstype]\n");
+        shell_error("mount: missing operand; usage: mount <device> <mountpoint> [fstype]");
         return SHELL_EINVAL;
     }
 
@@ -679,7 +657,7 @@ int cmd_mount(struct shell_context *ctx, int argc, char *argv[])
 
     int result = vfs_mount(device, mountpoint, fs_name, 0);
     if (result != VFS_SUCCESS) {
-        shell_printf("Mount failed (code %d)\n", result);
+        shell_error("Cannot mount %s on %s: %s", device, mountpoint, shell_vfs_strerror(result));
         return SHELL_ERROR;
     }
 
@@ -693,14 +671,14 @@ int cmd_umount(struct shell_context *ctx, int argc, char *argv[])
     (void)ctx;
 
     if (argc < 2) {
-        shell_print_error("Usage: umount <mountpoint>\n");
+        shell_error("umount: missing operand; usage: umount <mountpoint>");
         return SHELL_EINVAL;
     }
 
     const char *mountpoint = argv[1];
     int result = vfs_unmount(mountpoint);
     if (result != VFS_SUCCESS) {
-        shell_printf("Unmount failed (code %d)\n", result);
+        shell_error("Cannot unmount %s: %s", mountpoint, shell_vfs_strerror(result));
         return SHELL_ERROR;
     }
 
@@ -750,7 +728,7 @@ int cmd_help(struct shell_context *ctx, int argc, char *argv[])
                 shell_printf("Takes at most %d argument(s)\n", cmd->max_args);
             }
         } else {
-            shell_printf("Unknown command: %s\n", command);
+            shell_error("help: unknown command: %s", command);
         }
     } else {
         // Show all commands

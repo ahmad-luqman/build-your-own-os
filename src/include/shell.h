@@ -95,7 +95,8 @@ size_t shell_get_builtin_command_names(const char **names, size_t max_names);
 void shell_print_prompt(struct shell_context *ctx);
 int shell_read_command(struct shell_context *ctx);
 void shell_print(const char *message);
-void shell_print_error(const char *error);
+void shell_error(const char *format, ...);        // "Error: <msg>\n", never redirected
+const char *shell_vfs_strerror(int vfs_error);    // VFS_E* -> "not found", ...
 void shell_printf(const char *format, ...);
 
 // Command parser functions
