@@ -312,14 +312,129 @@ static void shell_console_write(const char *message)
     early_print(message);
 }
 
-// Print message to output
+/*
+ * Output redirection ("cmd > file", "cmd >> file", and the left side of a
+ * pipe). While a redirect is active, shell_print() output is collected in a
+ * small chunk buffer and written to the target file when the buffer fills
+ * and when the command finishes. Errors (shell_error) bypass this and still
+ * go to the console.
+ *
+ * Why a chunk buffer instead of writing on every shell_print(): kfree() is a
+ * no-op (bump allocator) and RAMFS reallocates the whole file on every
+ * growing write, so per-call writes would leak O(n^2) heap. The buffer itself
+ * is allocated once and reused for every redirect.
+ *
+ * The target is opened lazily on the first flush, so a command whose output
+ * fits in one chunk (e.g. "ls /tmp | cat") does not see its own pipe file.
+ */
+#define SHELL_REDIRECT_CHUNK 512
+
+static struct {
+    char *buf;              // SHELL_REDIRECT_CHUNK bytes, allocated on first use
+    size_t len;             // bytes pending in buf
+    const char *path;       // absolute target path (owned by the caller)
+    int fd;                 // -1 until the first flush opens the target
+    int append;             // 1 for ">>"
+    int active;
+    int error;              // first VFS error, reported by shell_redirect_end()
+} shell_redirect;
+
+static void shell_redirect_flush(void)
+{
+    if (shell_redirect.error != VFS_SUCCESS) {
+        shell_redirect.len = 0;
+        return;
+    }
+
+    if (shell_redirect.fd < 0) {
+        int flags = VFS_O_WRONLY | VFS_O_CREAT |
+                    (shell_redirect.append ? VFS_O_APPEND : VFS_O_TRUNC);
+        int fd = vfs_open(shell_redirect.path, flags, 0644);
+        if (fd < 0) {
+            shell_redirect.error = fd;
+            shell_redirect.len = 0;
+            return;
+        }
+        shell_redirect.fd = fd;
+    }
+
+    if (shell_redirect.len > 0) {
+        ssize_t written = vfs_write(shell_redirect.fd, shell_redirect.buf,
+                                    shell_redirect.len);
+        if (written != (ssize_t)shell_redirect.len) {
+            shell_redirect.error = (written < 0) ? (int)written : VFS_ENOSPC;
+        }
+        shell_redirect.len = 0;
+    }
+}
+
+// Start capturing shell_print() output for path (absolute). Returns
+// SHELL_SUCCESS, SHELL_ENOMEM, or SHELL_EINVAL if a redirect is already active.
+int shell_redirect_begin(const char *path, int append)
+{
+    if (!path || shell_redirect.active) {
+        return SHELL_EINVAL;
+    }
+
+    if (!shell_redirect.buf) {
+        shell_redirect.buf = (char *)kmalloc(SHELL_REDIRECT_CHUNK);
+        if (!shell_redirect.buf) {
+            return SHELL_ENOMEM;
+        }
+    }
+
+    shell_redirect.len = 0;
+    shell_redirect.path = path;
+    shell_redirect.fd = -1;
+    shell_redirect.append = append;
+    shell_redirect.error = VFS_SUCCESS;
+    shell_redirect.active = 1;
+    return SHELL_SUCCESS;
+}
+
+// Stop capturing. If commit, write any pending output (creating the target
+// even when the command printed nothing, so a pipe reader can open it);
+// otherwise discard it. Returns VFS_SUCCESS or the first VFS error seen.
+int shell_redirect_end(int commit)
+{
+    if (!shell_redirect.active) {
+        return VFS_SUCCESS;
+    }
+
+    if (commit) {
+        shell_redirect_flush();
+    }
+
+    if (shell_redirect.fd >= 0) {
+        vfs_close(shell_redirect.fd);
+    }
+
+    int error = commit ? shell_redirect.error : VFS_SUCCESS;
+    shell_redirect.len = 0;
+    shell_redirect.path = NULL;
+    shell_redirect.fd = -1;
+    shell_redirect.active = 0;
+    return error;
+}
+
+// Print message to output (the redirect target if one is active)
 void shell_print(const char *message)
 {
     if (!message) {
         return;
     }
 
-    shell_console_write(message);
+    if (!shell_redirect.active) {
+        shell_console_write(message);
+        return;
+    }
+
+    while (*message) {
+        if (shell_redirect.len == SHELL_REDIRECT_CHUNK) {
+            shell_redirect_flush();
+        }
+        shell_redirect.buf[shell_redirect.len++] = *message++;
+    }
 }
 
 // Format into buf (always NUL-terminated). Supports %s, %d, %x and %%.

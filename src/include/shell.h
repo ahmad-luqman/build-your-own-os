@@ -97,6 +97,10 @@ int shell_read_command(struct shell_context *ctx);
 void shell_print(const char *message);
 void shell_error(const char *format, ...);        // "Error: <msg>\n", never redirected
 const char *shell_vfs_strerror(int vfs_error);    // VFS_E* -> "not found", ...
+int shell_redirect_begin(const char *path, int append);  // capture shell_print output
+int shell_redirect_end(int commit);                      // flush + close; VFS_E* or 0
+void shell_build_full_path(char *dest, size_t dest_size, const char *current_dir,
+                           const char *path);            // cwd-relative -> normalized absolute
 void shell_printf(const char *format, ...);
 
 // Command parser functions

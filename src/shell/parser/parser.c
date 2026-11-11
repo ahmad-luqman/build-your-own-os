@@ -233,45 +233,63 @@ int execute_command(struct shell_context *ctx, struct command_line *cmd)
     }
 
 
-    // Store output redirection in context so commands can access it
-    // Save the original values
+    // Expose the redirection targets to commands (cat reads input_redirect_file)
     char *saved_output_redirect = ctx->output_redirect_file;
     int saved_append_mode = ctx->output_append_mode;
     char *saved_input_redirect = ctx->input_redirect_file;
     ctx->output_redirect_file = cmd->output_redirect;
     ctx->output_append_mode = cmd->output_append;
     ctx->input_redirect_file = cmd->input_redirect;
-    
-    // Set up I/O redirection if specified
+
+    int result;
+    char redirect_path[SHELL_MAX_PATH_LENGTH];
+
     if (setup_io_redirection(cmd) < 0) {
-        shell_error("Cannot set up I/O redirection");
-        ctx->output_redirect_file = saved_output_redirect;
-        ctx->output_append_mode = saved_append_mode;
-        ctx->input_redirect_file = saved_input_redirect;
-        return SHELL_ERROR;
+        result = SHELL_ERROR;
+        goto restore;
     }
-    
+
+    // Output redirection: capture everything the command prints via
+    // shell_print() into the target file. Errors still reach the console.
+    if (cmd->output_redirect) {
+        shell_build_full_path(redirect_path, sizeof(redirect_path),
+                              ctx->current_directory, cmd->output_redirect);
+        int begin = shell_redirect_begin(redirect_path, cmd->output_append);
+        if (begin != SHELL_SUCCESS) {
+            shell_error("Cannot redirect output: %s: %s", redirect_path,
+                        begin == SHELL_ENOMEM ? "out of memory" : "redirect already active");
+            result = begin;
+            goto restore;
+        }
+    }
+
     // Try to execute as built-in command first
-    int result = execute_builtin_command(ctx, cmd);
-    
+    result = execute_builtin_command(ctx, cmd);
     if (result == SHELL_ENOTFOUND) {
         // Not a built-in, try external program
         result = execute_external_program(ctx, cmd);
-        
-        if (result == SHELL_ENOTFOUND) {
-            shell_error("Command not found: %s", cmd->command);
-            ctx->output_redirect_file = saved_output_redirect;
-            ctx->output_append_mode = saved_append_mode;
-            ctx->input_redirect_file = saved_input_redirect;
-            return SHELL_ENOTFOUND;
+    }
+
+    if (cmd->output_redirect) {
+        // Don't create the target for a command that doesn't exist
+        int end = shell_redirect_end(result != SHELL_ENOTFOUND);
+        if (end != VFS_SUCCESS) {
+            shell_error("Cannot write file: %s: %s", redirect_path, shell_vfs_strerror(end));
+            if (result == SHELL_SUCCESS) {
+                result = SHELL_ERROR;
+            }
         }
     }
-    
-    // Restore context
+
+    if (result == SHELL_ENOTFOUND) {
+        shell_error("Command not found: %s", cmd->command);
+    }
+
+restore:
     ctx->output_redirect_file = saved_output_redirect;
     ctx->output_append_mode = saved_append_mode;
     ctx->input_redirect_file = saved_input_redirect;
-    
+
     return result;
 }
 
@@ -361,8 +379,8 @@ int setup_io_redirection(struct command_line *cmd)
         return SHELL_EINVAL;
     }
     
-    // Simple implementation - just validate filenames for now
-    // In the future, this would open files and redirect file descriptors
+    // Validate filenames only; execute_command() performs the redirection
+    // (output via shell_redirect_begin/end, input via ctx->input_redirect_file)
     
     if (cmd->input_redirect) {
         // Validate input file exists

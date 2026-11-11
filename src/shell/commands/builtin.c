@@ -81,7 +81,7 @@ static void normalize_path(char *dest, size_t dest_size, const char *path)
 }
 
 // Helper function to build full path from current directory and relative path
-static void build_full_path(char *dest, size_t dest_size, const char *current_dir, const char *path)
+void shell_build_full_path(char *dest, size_t dest_size, const char *current_dir, const char *path)
 {
     char temp[SHELL_MAX_PATH_LENGTH];
     
@@ -134,7 +134,7 @@ int cmd_cd(struct shell_context *ctx, int argc, char *argv[])
     
     // Build full path
     char full_path[SHELL_MAX_PATH_LENGTH];
-    build_full_path(full_path, sizeof(full_path), ctx->current_directory, path);
+    shell_build_full_path(full_path, sizeof(full_path), ctx->current_directory, path);
     
     // Validate that directory exists using VFS
     struct inode stat_buf;
@@ -203,7 +203,7 @@ int cmd_ls(struct shell_context *ctx, int argc, char *argv[])
     
     // Build full path if relative
     char full_path[SHELL_MAX_PATH_LENGTH];
-    build_full_path(full_path, sizeof(full_path), ctx->current_directory, path);
+    shell_build_full_path(full_path, sizeof(full_path), ctx->current_directory, path);
     
     // Try to open directory using VFS
     int fd = vfs_open(full_path, VFS_O_RDONLY, 0);
@@ -278,7 +278,7 @@ int cmd_cat(struct shell_context *ctx, int argc, char *argv[])
     
     // Build full path if relative
     char full_path[SHELL_MAX_PATH_LENGTH];
-    build_full_path(full_path, sizeof(full_path), ctx->current_directory, filename);
+    shell_build_full_path(full_path, sizeof(full_path), ctx->current_directory, filename);
     
     // Open file using VFS
     int fd = vfs_open(full_path, VFS_O_RDONLY, 0);
@@ -319,7 +319,7 @@ int cmd_mkdir(struct shell_context *ctx, int argc, char *argv[])
     
     // Build full path if relative
     char full_path[SHELL_MAX_PATH_LENGTH];
-    build_full_path(full_path, sizeof(full_path), ctx->current_directory, dirname);
+    shell_build_full_path(full_path, sizeof(full_path), ctx->current_directory, dirname);
 
     // Create directory using VFS
     int result = vfs_mkdir(full_path, 0755);
@@ -345,7 +345,7 @@ int cmd_rmdir(struct shell_context *ctx, int argc, char *argv[])
     
     // Build full path if relative
     char full_path[SHELL_MAX_PATH_LENGTH];
-    build_full_path(full_path, sizeof(full_path), ctx->current_directory, dirname);
+    shell_build_full_path(full_path, sizeof(full_path), ctx->current_directory, dirname);
     
     // Remove directory using VFS
     int result = vfs_rmdir(full_path);
@@ -391,7 +391,7 @@ int cmd_rm(struct shell_context *ctx, int argc, char *argv[])
     
     // Build full path if relative
     char full_path[SHELL_MAX_PATH_LENGTH];
-    build_full_path(full_path, sizeof(full_path), ctx->current_directory, filename);
+    shell_build_full_path(full_path, sizeof(full_path), ctx->current_directory, filename);
     
     // Remove file using VFS
     int result = vfs_unlink(full_path);
@@ -422,8 +422,8 @@ int cmd_cp(struct shell_context *ctx, int argc, char *argv[])
     char src_path[SHELL_MAX_PATH_LENGTH];
     char dst_path[SHELL_MAX_PATH_LENGTH];
     
-    build_full_path(src_path, sizeof(src_path), ctx->current_directory, source);
-    build_full_path(dst_path, sizeof(dst_path), ctx->current_directory, dest);
+    shell_build_full_path(src_path, sizeof(src_path), ctx->current_directory, source);
+    shell_build_full_path(dst_path, sizeof(dst_path), ctx->current_directory, dest);
     
     // Open source file
     int src_fd = vfs_open(src_path, VFS_O_RDONLY, 0);
@@ -486,8 +486,8 @@ int cmd_mv(struct shell_context *ctx, int argc, char *argv[])
     char src_path[SHELL_MAX_PATH_LENGTH];
     char dst_path[SHELL_MAX_PATH_LENGTH];
     
-    build_full_path(src_path, sizeof(src_path), ctx->current_directory, source);
-    build_full_path(dst_path, sizeof(dst_path), ctx->current_directory, dest);
+    shell_build_full_path(src_path, sizeof(src_path), ctx->current_directory, source);
+    shell_build_full_path(dst_path, sizeof(dst_path), ctx->current_directory, dest);
     
     // Use VFS rename operation
     int result = vfs_rename(src_path, dst_path);
@@ -500,74 +500,23 @@ int cmd_mv(struct shell_context *ctx, int argc, char *argv[])
     return SHELL_SUCCESS;
 }
 
-// Echo command with optional output redirection
+// Echo command. Redirection ("echo x > file", pipes) is handled generically
+// by execute_command(), which captures shell_print() output.
 int cmd_echo(struct shell_context *ctx, int argc, char *argv[])
 {
     if (!ctx) {
         return SHELL_EINVAL;
     }
-    
-    // Check if output redirection is active (set by parser)
-    if (ctx->output_redirect_file) {
-        // Output redirection: echo text > file
-        const char *filename = ctx->output_redirect_file;
-        
-        // Build full path
-        char full_path[SHELL_MAX_PATH_LENGTH];
-        build_full_path(full_path, sizeof(full_path), ctx->current_directory, filename);
-        
-        // Open/create file for writing or appending
-        int flags = VFS_O_WRONLY | VFS_O_CREAT;
-        if (ctx->output_append_mode) {
-            flags |= VFS_O_APPEND;  // Append mode
-        } else {
-            flags |= VFS_O_TRUNC;   // Truncate mode
+
+    for (int i = 1; i < argc; i++) {
+        if (i > 1) {
+            shell_print(" ");
         }
-        
-        int fd = vfs_open(full_path, flags, 0644);
-        if (fd < 0) {
-            shell_error("Cannot create file: %s: %s", full_path, shell_vfs_strerror(fd));
-            return SHELL_ERROR;
-        }
-        
-        // Build output string from all arguments
-        char buffer[1024];
-        size_t pos = 0;
-        for (int i = 1; i < argc; i++) {
-            if (i > 1 && pos < sizeof(buffer) - 1) {
-                buffer[pos++] = ' ';
-            }
-            const char *arg = argv[i];
-            while (*arg && pos < sizeof(buffer) - 1) {
-                buffer[pos++] = *arg++;
-            }
-        }
-        buffer[pos++] = '\n';
-        buffer[pos] = '\0';
-        
-        // Write to file
-        ssize_t written = vfs_write(fd, buffer, pos);
-        vfs_close(fd);
-        
-        if (written < 0) {
-            shell_error("Cannot write file: %s: %s", full_path, shell_vfs_strerror((int)written));
-            return SHELL_ERROR;
-        }
-        
-        // Success - no output to console
-        return SHELL_SUCCESS;
-    } else {
-        // Normal echo - print to console
-        for (int i = 1; i < argc; i++) {
-            if (i > 1) {
-                shell_print(" ");
-            }
-            shell_print(argv[i]);
-        }
-        shell_print("\n");
-        
-        return SHELL_SUCCESS;
+        shell_print(argv[i]);
     }
+    shell_print("\n");
+
+    return SHELL_SUCCESS;
 }
 
 // Touch command - create an empty file or update timestamp
@@ -586,7 +535,7 @@ int cmd_touch(struct shell_context *ctx, int argc, char *argv[])
     
     // Build full path
     char full_path[SHELL_MAX_PATH_LENGTH];
-    build_full_path(full_path, sizeof(full_path), ctx->current_directory, path);
+    shell_build_full_path(full_path, sizeof(full_path), ctx->current_directory, path);
     
     // Try to open existing file
     int fd = vfs_open(full_path, VFS_O_RDONLY, 0);
