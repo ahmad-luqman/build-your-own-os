@@ -12,6 +12,10 @@
 // Add forward declaration for early_print
 void early_print(const char *str);
 
+// Kernel image bounds from linker.ld (same types as arch/arm64/include/memory.h)
+extern uint64_t __kernel_start;
+extern uint64_t __kernel_end;
+
 // Memory allocation bitmap  
 #define MAX_PAGES           4096        // Support up to 16MB of 4KB pages (sufficient for Phase 3)
 #define BITMAP_SIZE         (MAX_PAGES / 8)
@@ -80,7 +84,39 @@ void arch_memory_allocator_init(struct memory_map_entry *memory_map,
             return;  // Region too small
         }
     }
-    
+
+    /*
+     * Reserve the kernel image (same guard as x86-64, see issue #27).
+     *
+     * RAM starts at 0x40000000 but the kernel is loaded at __kernel_start
+     * (0x40080000) and runs to __kernel_end. That range includes .bss with the
+     * 2MB static kmalloc heap, and the fixed boot and exception stacks
+     * (0x40200000 / 0x40300000) currently also fall inside it. Without this
+     * guard, any allocation past the first 512KB of RAM would be handed
+     * memory the kernel is already using (and QEMU may place the DTB at the
+     * start of RAM, below the kernel).
+     * On x86-64 this exact overlap let SFS format zero the kernel's .text.
+     *
+     * If the kernel overlaps the chosen region, move the base up to the
+     * page-aligned end of the image, so [region start, kernel end) is never
+     * handed out.
+     */
+    uint64_t kernel_start = (uint64_t)(uintptr_t)&__kernel_start;
+    uint64_t kernel_end = ((uint64_t)(uintptr_t)&__kernel_end + PAGE_SIZE_4K - 1)
+                          & ~(uint64_t)(PAGE_SIZE_4K - 1);
+    uint64_t region_end = memory_base + usable_size;
+
+    if (kernel_start < region_end && kernel_end > memory_base) {
+        if (kernel_end >= region_end) {
+            early_print("allocator: kernel image covers the whole usable region, "
+                        "no pages available!\n");
+            return;  // total_pages/free_pages stay 0, so allocations return NULL
+        }
+        early_print("allocator: reserving kernel image, base moved past __kernel_end\n");
+        usable_size = region_end - kernel_end;
+        memory_base = kernel_end;
+    }
+
     // Calculate number of pages
     total_pages = usable_size / PAGE_SIZE_4K;
     if (total_pages > MAX_PAGES) {
